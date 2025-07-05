@@ -105,7 +105,7 @@ class AuthService:
                 print("Email configuration not complete, skipping email")
                 return
             
-            approval_link = f"http://127.0.0.1:5000/admin-verify?email={admin_email}"
+            approval_link = f"https://campusassets.onrender.com/admin-verify?email={admin_email}"
             
             msg = MIMEMultipart()
             msg['Subject'] = 'New Admin Account Verification Required'
@@ -621,6 +621,485 @@ class ResourceService:
         except Exception as e:
             return format_response(error=f"Failed to fetch unique values: {str(e)}", status=400)
 
+# class AIService:
+#     def __init__(self):
+#         self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
+#         self.headers = {
+#             "Authorization": f"Bearer {GROQ_API_KEY}",
+#             "Content-Type": "application/json"
+#         }
+    
+#     def natural_crud(self, data, request):
+#         """Process natural language CRUD instructions"""
+#         try:
+#             instruction = data.get('instruction')
+#             user_data = get_user_from_token(request)
+            
+#             # Enhanced parsing prompt with more specific JSON format
+#             parsing_prompt = f"""
+#     You are a database operation parser. Parse this natural language instruction for resource management:
+
+#     Instruction: "{instruction}"
+
+#     You must respond with ONLY a valid JSON object in this exact format:
+#     {{
+#         "operation": "CREATE|READ|UPDATE|DELETE",
+#         "fields": {{}},
+#         "filters": {{}},
+#         "missing_fields": [],
+#         "resource_id": null
+#     }}
+
+#     Rules:
+#     - operation: Must be CREATE, READ, UPDATE, or DELETE
+#     - fields: Object with field names and values to set/create
+#     - filters: Object with criteria to find resources
+#     - missing_fields: Array of required fields that are missing
+#     - resource_id: String ID if a specific resource is mentioned
+
+#     Required fields for CREATE: sl_no, description, service_tag, identification_number, procurement_date, cost, location, department
+
+#     Examples:
+#     - "update cost to 1000 for CSE department" → {{"operation": "UPDATE", "fields": {{"cost": "1000"}}, "filters": {{"department": "CSE"}}, "missing_fields": [], "resource_id": null}}
+#     - "create new monitor" → {{"operation": "CREATE", "fields": {{}}, "filters": {{}}, "missing_fields": ["sl_no", "description", "service_tag", "identification_number", "procurement_date", "cost", "location", "department"], "resource_id": null}}
+
+#     Parse: "{instruction}"
+#     """
+            
+#             ai_response = self._call_groq_api(parsing_prompt)
+            
+#             if not ai_response:
+#                 return format_response(error="Failed to get AI response", status=500)
+            
+#             # Clean the response - remove any non-JSON content
+#             try:
+#                 # Try to find JSON in the response
+#                 import re
+#                 json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+#                 if json_match:
+#                     json_str = json_match.group()
+#                     parsed_data = json.loads(json_str)
+#                 else:
+#                     # If no JSON found, create a basic structure
+#                     parsed_data = {
+#                         "operation": "READ",
+#                         "fields": {},
+#                         "filters": {},
+#                         "missing_fields": [],
+#                         "resource_id": None
+#                     }
+                    
+#                     # Try to extract operation type from instruction
+#                     instruction_lower = instruction.lower()
+#                     if any(word in instruction_lower for word in ['create', 'add', 'new']):
+#                         parsed_data["operation"] = "CREATE"
+#                         parsed_data["missing_fields"] = RESOURCE_REQUIRED_FIELDS
+#                     elif any(word in instruction_lower for word in ['update', 'change', 'modify', 'edit']):
+#                         parsed_data["operation"] = "UPDATE"
+#                         # Try to extract fields from instruction
+#                         if 'cost' in instruction_lower:
+#                             import re
+#                             cost_match = re.search(r'(\d+)', instruction)
+#                             if cost_match:
+#                                 parsed_data["fields"]["cost"] = cost_match.group(1)
+#                         if 'cse' in instruction_lower or 'CSE' in instruction:
+#                             parsed_data["filters"]["department"] = "CSE"
+#                     elif any(word in instruction_lower for word in ['delete', 'remove']):
+#                         parsed_data["operation"] = "DELETE"
+                        
+#             except json.JSONDecodeError as e:
+#                 print(f"JSON parsing error: {e}")
+#                 print(f"AI response was: {ai_response}")
+                
+#                 # Fallback: create a basic response based on instruction keywords
+#                 instruction_lower = instruction.lower()
+#                 if any(word in instruction_lower for word in ['update', 'change', 'modify']):
+#                     parsed_data = {
+#                         "operation": "UPDATE",
+#                         "fields": {},
+#                         "filters": {},
+#                         "missing_fields": [],
+#                         "resource_id": None
+#                     }
+                    
+#                     # Extract cost if mentioned
+#                     import re
+#                     cost_match = re.search(r'(\d+)', instruction)
+#                     if cost_match:
+#                         parsed_data["fields"]["cost"] = cost_match.group(1)
+                    
+#                     # Extract department if mentioned
+#                     if 'cse' in instruction_lower:
+#                         parsed_data["filters"]["department"] = "CSE"
+#                     elif 'ece' in instruction_lower:
+#                         parsed_data["filters"]["department"] = "ECE"
+#                     elif 'eee' in instruction_lower:
+#                         parsed_data["filters"]["department"] = "EEE"
+                        
+#                 else:
+#                     return format_response(
+#                         error=f"Could not parse instruction. AI response: {ai_response[:200]}...", 
+#                         status=500
+#                     )
+            
+#             # Validate the parsed data structure
+#             if not isinstance(parsed_data, dict):
+#                 return format_response(error="Invalid response structure", status=500)
+                
+#             # Ensure required keys exist
+#             required_keys = ["operation", "fields", "filters", "missing_fields", "resource_id"]
+#             for key in required_keys:
+#                 if key not in parsed_data:
+#                     parsed_data[key] = [] if key == "missing_fields" else ({} if key in ["fields", "filters"] else None)
+            
+#             # Check for missing fields
+#             if parsed_data.get('missing_fields'):
+#                 return format_response(
+#                     data={
+#                         'missing_fields': parsed_data['missing_fields'],
+#                         'message': f"Please provide the following fields: {', '.join(parsed_data['missing_fields'])}"
+#                     },
+#                     status=400
+#                 )
+            
+#             # Execute the operation
+#             operation = parsed_data.get('operation', '').upper()
+            
+#             if operation == 'CREATE':
+#                 return self._execute_create(parsed_data.get('fields', {}), user_data)
+#             elif operation == 'READ':
+#                 return self._execute_read(parsed_data.get('filters', {}))
+#             elif operation == 'UPDATE':
+#                 return self._execute_update_bulk(
+#                     parsed_data.get('filters', {}),
+#                     parsed_data.get('fields', {}),
+#                     user_data
+#                 )
+#             elif operation == 'DELETE':
+#                 return self._execute_delete_bulk(parsed_data.get('filters', {}))
+#             else:
+#                 return format_response(error=f"Unknown operation: {operation}", status=400)
+            
+#         except Exception as e:
+#             print(f"Natural CRUD error: {e}")
+#             return format_response(error=f"Natural CRUD failed: {str(e)}", status=500)
+
+#     def _call_groq_api(self, prompt):
+#         """Call Groq API with better error handling"""
+#         try:
+#             payload = {
+#                 "model": "llama3-8b-8192",
+#                 "messages": [
+#                     {
+#                         "role": "system", 
+#                         "content": "You are a precise database operation parser. Always respond with valid JSON only."
+#                     },
+#                     {
+#                         "role": "user", 
+#                         "content": prompt
+#                     }
+#                 ],
+#                 "max_tokens": 500,
+#                 "temperature": 0.1
+#             }
+            
+#             response = requests.post(self.groq_url, headers=self.headers, json=payload, timeout=30)
+#             response.raise_for_status()
+            
+#             result = response.json()
+#             if 'choices' in result and len(result['choices']) > 0:
+#                 return result['choices'][0]['message']['content'].strip()
+#             else:
+#                 print(f"Unexpected Groq response structure: {result}")
+#                 return None
+                
+#         except requests.exceptions.Timeout:
+#             print("Groq API timeout")
+#             return None
+#         except requests.exceptions.RequestException as e:
+#             print(f"Groq API request error: {e}")
+#             return None
+#         except Exception as e:
+#             print(f"Groq API error: {e}")
+#             return None
+
+#     def _execute_create(self, fields, user_data):
+#         """Execute CREATE operation"""
+#         try:
+#             resource_doc = {
+#                 'sl_no': fields.get('sl_no'),
+#                 'description': fields.get('description'),
+#                 'service_tag': fields.get('service_tag'),
+#                 'identification_number': fields.get('identification_number'),
+#                 'procurement_date': fields.get('procurement_date'),
+#                 'cost': float(fields.get('cost', 0)),
+#                 'location': fields.get('location'),
+#                 'department': fields.get('department'),
+#                 'created_by': user_data['email'],
+#                 'created_at': datetime.datetime.utcnow(),
+#                 'updated_at': datetime.datetime.utcnow()
+#             }
+            
+#             result = db[RESOURCES_COLLECTION].insert_one(resource_doc)
+            
+#             return format_response(
+#                 data={'resource_id': str(result.inserted_id)},
+#                 message="Resource created successfully via AI",
+#                 status=201
+#             )
+            
+#         except Exception as e:
+#             return format_response(error=f"Create operation failed: {str(e)}", status=400)
+    
+#     def _execute_read(self, filters):
+#         """Execute READ operation"""
+#         try:
+#             query = {}
+#             for key, value in filters.items():
+#                 if key in ['location', 'department', 'description']:
+#                     query[key] = {'$regex': value, '$options': 'i'}
+#                 else:
+#                     query[key] = value
+            
+#             resources = list(db[RESOURCES_COLLECTION].find(query).limit(10))
+            
+#             for resource in resources:
+#                 resource['_id'] = str(resource['_id'])
+#                 if 'created_at' in resource:
+#                     resource['created_at'] = resource['created_at'].isoformat()
+#                 if 'updated_at' in resource:
+#                     resource['updated_at'] = resource['updated_at'].isoformat()
+            
+#             return format_response(data=resources, status=200)
+            
+#         except Exception as e:
+#             return format_response(error=f"Read operation failed: {str(e)}", status=400)
+    
+#     def _execute_update(self, resource_id, fields, user_data):
+#         """Execute UPDATE operation"""
+#         try:
+#             if not resource_id or not ObjectId.is_valid(resource_id):
+#                 return format_response(error="Invalid resource ID", status=400)
+            
+#             update_data = {k: v for k, v in fields.items() if v is not None}
+#             if 'cost' in update_data:
+#                 update_data['cost'] = float(update_data['cost'])
+            
+#             update_data['updated_at'] = datetime.datetime.utcnow()
+#             update_data['updated_by'] = user_data['email']
+            
+#             result = db[RESOURCES_COLLECTION].update_one(
+#                 {'_id': ObjectId(resource_id)},
+#                 {'$set': update_data}
+#             )
+            
+#             if result.matched_count == 0:
+#                 return format_response(error="Resource not found", status=404)
+            
+#             return format_response(message="Resource updated successfully via AI", status=200)
+            
+#         except Exception as e:
+#             return format_response(error=f"Update operation failed: {str(e)}", status=400)
+    
+#     def _execute_delete(self, resource_id):
+#         """Execute DELETE operation"""
+#         try:
+#             if not resource_id or not ObjectId.is_valid(resource_id):
+#                 return format_response(error="Invalid resource ID", status=400)
+            
+#             result = db[RESOURCES_COLLECTION].delete_one({'_id': ObjectId(resource_id)})
+            
+#             if result.deleted_count == 0:
+#                 return format_response(error="Resource not found", status=404)
+            
+#             return format_response(message="Resource deleted successfully via AI", status=200)
+            
+#         except Exception as e:
+#             return format_response(error=f"Delete operation failed: {str(e)}", status=400)
+    
+#     def chat(self, data, request):
+#         """Handle chat queries about resources"""
+#         try:
+#             message = data.get('message')
+#             user_data = get_user_from_token(request)
+            
+#             # Get context about resources
+#             context = self._get_resource_context()
+            
+#             # Create chat prompt
+#             chat_prompt = f"""
+#             You are a resource management assistant. Answer questions about the resources based on the following context:
+            
+#             Context: {context}
+            
+#             User question: {message}
+            
+#             Provide a helpful and accurate response about the resources. If you need specific data that's not in the context, ask for clarification.
+#             """
+            
+#             ai_response = self._call_groq_api(chat_prompt)
+            
+#             if not ai_response:
+#                 return format_response(error="Failed to get response", status=500)
+            
+#             # Save chat history
+#             chat_doc = {
+#                 'user_id': user_data['uid'],
+#                 'message': message,
+#                 'response': ai_response,
+#                 'timestamp': datetime.datetime.utcnow()
+#             }
+            
+#             db[CHAT_HISTORY_COLLECTION].insert_one(chat_doc)
+            
+#             return format_response(
+#                 data={
+#                     'response': ai_response,
+#                     'timestamp': datetime.datetime.utcnow().isoformat()
+#                 },
+#                 status=200
+#             )
+            
+#         except Exception as e:
+#             return format_response(error=f"Chat failed: {str(e)}", status=500)
+    
+#     def _get_resource_context(self):
+#         """Get context about current resources"""
+#         try:
+#             total_resources = db[RESOURCES_COLLECTION].count_documents({})
+            
+#             # Get sample resources
+#             sample_resources = list(db[RESOURCES_COLLECTION].find().limit(5))
+            
+#             # Get stats
+#             locations = db[RESOURCES_COLLECTION].distinct('location')
+#             departments = db[RESOURCES_COLLECTION].distinct('department')
+            
+#             context = {
+#                 'total_resources': total_resources,
+#                 'locations': locations,
+#                 'departments': departments,
+#                 'sample_resources': [
+#                     {
+#                         'description': r.get('description'),
+#                         'location': r.get('location'),
+#                         'department': r.get('department'),
+#                         'cost': r.get('cost')
+#                     } for r in sample_resources
+#                 ]
+#             }
+            
+#             return json.dumps(context, indent=2)
+            
+#         except Exception as e:
+#             return "No resource context available"
+    
+#     def chat_history(self, user_id, page, limit, request):
+#         """Get chat history"""
+#         try:
+#             user_data = get_user_from_token(request)
+            
+#             # If no user_id provided, use current user
+#             if not user_id:
+#                 user_id = user_data['uid']
+            
+#             # Check if user can access this history
+#             if user_data['role'] != ADMIN_ROLE and user_id != user_data['uid']:
+#                 return format_response(error="Access denied", status=403)
+            
+#             skip = (page - 1) * limit
+            
+#             history = list(db[CHAT_HISTORY_COLLECTION].find(
+#                 {'user_id': user_id}
+#             ).sort('timestamp', -1).skip(skip).limit(limit))
+            
+#             for chat in history:
+#                 chat['_id'] = str(chat['_id'])
+#                 chat['timestamp'] = chat['timestamp'].isoformat()
+            
+#             return format_response(data=history, status=200)
+            
+#         except Exception as e:
+#             return format_response(error=f"Failed to fetch chat history: {str(e)}", status=400)
+#     def _execute_update_bulk(self, filters, fields, user_data):
+#         """Execute UPDATE operation on multiple resources"""
+#         try:
+#             if not filters:
+#                 return format_response(error="No filters provided for update", status=400)
+            
+#             if not fields:
+#                 return format_response(error="No fields provided for update", status=400)
+            
+#             # Build query from filters
+#             query = {}
+#             for key, value in filters.items():
+#                 if key in ['location', 'department', 'description']:
+#                     query[key] = {'$regex': value, '$options': 'i'}
+#                 else:
+#                     query[key] = value
+            
+#             # Prepare update data
+#             update_data = {k: v for k, v in fields.items() if v is not None}
+#             if 'cost' in update_data:
+#                 update_data['cost'] = float(update_data['cost'])
+            
+#             update_data['updated_at'] = datetime.datetime.utcnow()
+#             update_data['updated_by'] = user_data['email']
+            
+#             # Update resources
+#             result = db[RESOURCES_COLLECTION].update_many(query, {'$set': update_data})
+            
+#             return format_response(
+#                 data={
+#                     'matched_count': result.matched_count,
+#                     'modified_count': result.modified_count,
+#                     'filters_used': filters,
+#                     'fields_updated': fields
+#                 },
+#                 message=f"Updated {result.modified_count} resources via AI",
+#                 status=200
+#             )
+            
+#         except Exception as e:
+#             return format_response(error=f"Bulk update operation failed: {str(e)}", status=400)
+
+#     def _execute_delete_bulk(self, filters):
+#         """Execute DELETE operation on multiple resources"""
+#         try:
+#             if not filters:
+#                 return format_response(error="No filters provided for delete", status=400)
+            
+#             # Build query from filters
+#             query = {}
+#             for key, value in filters.items():
+#                 if key in ['location', 'department', 'description']:
+#                     query[key] = {'$regex': value, '$options': 'i'}
+#                 else:
+#                     query[key] = value
+            
+#             # Count resources to be deleted
+#             count = db[RESOURCES_COLLECTION].count_documents(query)
+            
+#             if count == 0:
+#                 return format_response(error="No resources found matching the criteria", status=404)
+            
+#             # Delete resources
+#             result = db[RESOURCES_COLLECTION].delete_many(query)
+            
+#             return format_response(
+#                 data={
+#                     'deleted_count': result.deleted_count,
+#                     'filters_used': filters
+#                 },
+#                 message=f"Deleted {result.deleted_count} resources via AI",
+#                 status=200
+#             )
+            
+#         except Exception as e:
+#             return format_response(error=f"Bulk delete operation failed: {str(e)}", status=400)
+
+
+
 class AIService:
     def __init__(self):
         self.groq_url = "https://api.groq.com/openai/v1/chat/completions"
@@ -629,185 +1108,404 @@ class AIService:
             "Content-Type": "application/json"
         }
     
-    def natural_crud(self, data, request):
-        """Process natural language CRUD instructions"""
+    def _get_resource_context(self):
+        """Get comprehensive context about ALL current resources from MongoDB"""
         try:
-            instruction = data.get('instruction')
+            if db is None:
+                return json.dumps({"error": "Database connection not available"})
+            
+            # Fetch ALL resources from the collection (remove the limit)
+            resources = list(db[RESOURCES_COLLECTION].find({}))
+            
+            # Format resources for context
+            formatted_resources = []
+            total_cost = 0
+            departments = set()
+            locations = set()
+            
+            for r in resources:
+                resource_data = {
+                    "id": str(r.get('_id', '')),
+                    "sl_no": str(r.get('sl_no', '')),
+                    "description": r.get('description', ''),
+                    "service_tag": r.get('service_tag', ''),
+                    "identification_number": r.get('identification_number', ''),
+                    "procurement_date": r.get('procurement_date', ''),
+                    "cost": float(r.get('cost', 0)),
+                    "location": r.get('location', ''),
+                    "department": r.get('department', ''),
+                    "created_by": r.get('created_by', ''),
+                    "created_at": r.get('created_at', '').isoformat() if r.get('created_at') else '',
+                    "updated_at": r.get('updated_at', '').isoformat() if r.get('updated_at') else ''
+                }
+                formatted_resources.append(resource_data)
+                total_cost += resource_data['cost']
+                departments.add(resource_data['department'])
+                locations.add(resource_data['location'])
+            
+            # Get department-wise statistics
+            dept_stats = {}
+            location_stats = {}
+            
+            for r in formatted_resources:
+                dept = r['department']
+                loc = r['location']
+                
+                if dept in dept_stats:
+                    dept_stats[dept]['count'] += 1
+                    dept_stats[dept]['total_cost'] += r['cost']
+                else:
+                    dept_stats[dept] = {'count': 1, 'total_cost': r['cost']}
+                
+                if loc in location_stats:
+                    location_stats[loc]['count'] += 1
+                    location_stats[loc]['total_cost'] += r['cost']
+                else:
+                    location_stats[loc] = {'count': 1, 'total_cost': r['cost']}
+            
+            context = {
+                "total_resources": len(formatted_resources),
+                "total_cost": total_cost,
+                "departments": list(departments),
+                "locations": list(locations),
+                "department_statistics": dept_stats,
+                "location_statistics": location_stats,
+                "all_resources": formatted_resources,
+                "last_updated": datetime.datetime.utcnow().isoformat()
+            }
+            
+            return json.dumps(context, indent=2, default=str)
+            
+        except Exception as e:
+            print(f"Error getting resource context: {e}")
+            return json.dumps({"error": str(e), "total_resources": 0, "all_resources": []})
+    
+    def chat(self, data, request):
+        """Handle chat queries about resources with enhanced context and formatted answers"""
+        try:
+            message = data.get('message')
             user_data = get_user_from_token(request)
             
-            # Enhanced parsing prompt with more specific JSON format
-            parsing_prompt = f"""
-    You are a database operation parser. Parse this natural language instruction for resource management:
-
-    Instruction: "{instruction}"
-
-    You must respond with ONLY a valid JSON object in this exact format:
-    {{
-        "operation": "CREATE|READ|UPDATE|DELETE",
-        "fields": {{}},
-        "filters": {{}},
-        "missing_fields": [],
-        "resource_id": null
-    }}
-
-    Rules:
-    - operation: Must be CREATE, READ, UPDATE, or DELETE
-    - fields: Object with field names and values to set/create
-    - filters: Object with criteria to find resources
-    - missing_fields: Array of required fields that are missing
-    - resource_id: String ID if a specific resource is mentioned
-
-    Required fields for CREATE: sl_no, description, service_tag, identification_number, procurement_date, cost, location, department
-
-    Examples:
-    - "update cost to 1000 for CSE department" → {{"operation": "UPDATE", "fields": {{"cost": "1000"}}, "filters": {{"department": "CSE"}}, "missing_fields": [], "resource_id": null}}
-    - "create new monitor" → {{"operation": "CREATE", "fields": {{}}, "filters": {{}}, "missing_fields": ["sl_no", "description", "service_tag", "identification_number", "procurement_date", "cost", "location", "department"], "resource_id": null}}
-
-    Parse: "{instruction}"
-    """
+            if db is None:
+                return format_response(error="Database connection not available", status=500)
             
-            ai_response = self._call_groq_api(parsing_prompt)
+            # Get comprehensive context about ALL resources
+            context = self._get_resource_context()
+            
+            # Create enhanced chat prompt for better formatted responses
+            chat_prompt = f"""
+You are a professional and knowledgeable assistant for a Campus Assets Management System. You have access to real-time data about all campus resources.
+
+## Current Database Context:
+{context}
+
+## User Question:
+{message}
+
+## Instructions:
+Please provide a comprehensive, well-formatted response using markdown. Follow these guidelines:
+
+1. **Structure your response clearly** with headers, bullet points, and sections
+2. **Be specific and detailed** - reference actual data from the context
+3. **Use tables** when comparing multiple items or showing statistics
+4. **Include relevant metrics** like costs, counts, percentages when applicable
+5. **Provide actionable insights** and recommendations when possible
+6. **Format numbers properly** (e.g., ₹35,000 for currency)
+7. **Use emojis sparingly** for better readability
+
+## Response Format:
+Start with a brief summary, then provide detailed analysis with proper markdown formatting.
+"""
+            
+            ai_response = self._call_groq_api(chat_prompt)
             
             if not ai_response:
                 return format_response(error="Failed to get AI response", status=500)
             
-            # Clean the response - remove any non-JSON content
-            try:
-                # Try to find JSON in the response
-                import re
-                json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group()
-                    parsed_data = json.loads(json_str)
-                else:
-                    # If no JSON found, create a basic structure
-                    parsed_data = {
-                        "operation": "READ",
-                        "fields": {},
-                        "filters": {},
-                        "missing_fields": [],
-                        "resource_id": None
-                    }
+            # Save chat history to database
+            chat_doc = {
+                'user_id': user_data['uid'],
+                'message': message,
+                'response': ai_response,
+                'timestamp': datetime.datetime.utcnow(),
+                'context_resources_count': json.loads(context).get('total_resources', 0)
+            }
+            
+            db[CHAT_HISTORY_COLLECTION].insert_one(chat_doc)
+            
+            return format_response(
+                data={
+                    'response': ai_response,
+                    'timestamp': datetime.datetime.utcnow().isoformat(),
+                    'resources_analyzed': json.loads(context).get('total_resources', 0)
+                },
+                status=200
+            )
+            
+        except Exception as e:
+            print(f"Chat error: {e}")
+            return format_response(error=f"Chat failed: {str(e)}", status=500)
+    
+    def natural_crud(self, data, request):
+        """Process natural language CRUD instructions with enhanced context and detailed explanations"""
+        try:
+            instruction = data.get('instruction')
+            user_data = get_user_from_token(request)
+            
+            if db is None:
+                return format_response(error="Database connection not available", status=500)
+            
+            # Get comprehensive context about ALL resources
+            context = self._get_resource_context()
+            
+            # Enhanced parsing prompt with detailed context and explanation request
+            parsing_prompt = f"""
+You are an advanced database operation parser for a Campus Assets Management System.
+
+## Current Database Context:
+{context}
+
+## User Instruction:
+"{instruction}"
+
+## Your Tasks:
+1. **Parse the instruction** and determine the database operation needed
+2. **Extract relevant information** from the instruction
+3. **Validate against current data** using the provided context
+4. **Provide detailed explanation** of what will be done
+
+## Response Format:
+First, provide a JSON object with the following structure:
+
+
+```
+{
+"operation": "CREATE|READ|UPDATE|DELETE",
+"fields": {
+"field_name": "value"
+},
+"filters": {
+"field_name": "value"
+},
+"missing_fields": ["field1", "field2"],
+"resource_id": "string_or_null",
+"confidence": "high|medium|low",
+"estimated_affected_records": number
+}
+```
+
+Then provide a comprehensive markdown explanation including:
+- **Operation Summary**: What operation will be performed
+- **Target Resources**: Which resources will be affected (be specific)
+- **Changes Made**: Detailed description of changes
+- **Validation Notes**: Any important considerations or warnings
+- **Expected Outcome**: What the result will be
+
+## Required Fields for CREATE operations:
+sl_no, description, service_tag, identification_number, procurement_date, cost, location, department
+
+## Available Departments: {', '.join(json.loads(context).get('departments', []))}
+## Available Locations: {', '.join(json.loads(context).get('locations', []))}
+"""
+            
+            ai_response = self._call_groq_api(parsing_prompt)
+            
+            if not ai_response:
+                return format_response(error="Failed to process instruction with AI", status=500)
+            
+            # Extract JSON and explanation from AI response
+# Extract JSON and explanation from AI response
+            import re
+
+            # Try to find JSON in code blocks first
+            json_match = re.search(r'```json\s*\n(.*?)\n```')
+            if not json_match:
+                # Try to find JSON without code blocks
+                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', ai_response, re.DOTALL)
+
+            if not json_match:
+                # If no JSON found, try a different approach
+                try:
+                    # Look for any content that looks like JSON
+                    lines = ai_response.split('\n')
+                    json_lines = []
+                    in_json = False
                     
-                    # Try to extract operation type from instruction
-                    instruction_lower = instruction.lower()
-                    if any(word in instruction_lower for word in ['create', 'add', 'new']):
-                        parsed_data["operation"] = "CREATE"
-                        parsed_data["missing_fields"] = RESOURCE_REQUIRED_FIELDS
-                    elif any(word in instruction_lower for word in ['update', 'change', 'modify', 'edit']):
-                        parsed_data["operation"] = "UPDATE"
-                        # Try to extract fields from instruction
-                        if 'cost' in instruction_lower:
-                            import re
-                            cost_match = re.search(r'(\d+)', instruction)
-                            if cost_match:
-                                parsed_data["fields"]["cost"] = cost_match.group(1)
-                        if 'cse' in instruction_lower or 'CSE' in instruction:
-                            parsed_data["filters"]["department"] = "CSE"
-                    elif any(word in instruction_lower for word in ['delete', 'remove']):
-                        parsed_data["operation"] = "DELETE"
-                        
-            except json.JSONDecodeError as e:
-                print(f"JSON parsing error: {e}")
-                print(f"AI response was: {ai_response}")
-                
-                # Fallback: create a basic response based on instruction keywords
-                instruction_lower = instruction.lower()
-                if any(word in instruction_lower for word in ['update', 'change', 'modify']):
-                    parsed_data = {
-                        "operation": "UPDATE",
-                        "fields": {},
-                        "filters": {},
-                        "missing_fields": [],
-                        "resource_id": None
-                    }
+                    for line in lines:
+                        if '{' in line and not in_json:
+                            in_json = True
+                            json_lines.append(line)
+                        elif in_json:
+                            json_lines.append(line)
+                            if '}' in line and line.count('}') >= line.count('{'):
+                                break
                     
-                    # Extract cost if mentioned
-                    import re
-                    cost_match = re.search(r'(\d+)', instruction)
-                    if cost_match:
-                        parsed_data["fields"]["cost"] = cost_match.group(1)
-                    
-                    # Extract department if mentioned
-                    if 'cse' in instruction_lower:
-                        parsed_data["filters"]["department"] = "CSE"
-                    elif 'ece' in instruction_lower:
-                        parsed_data["filters"]["department"] = "ECE"
-                    elif 'eee' in instruction_lower:
-                        parsed_data["filters"]["department"] = "EEE"
-                        
-                else:
+                    if json_lines:
+                        json_str = '\n'.join(json_lines)
+                        # Clean up the JSON string
+                        json_str = re.sub(r'^[^{]*', '', json_str)
+                        json_str = re.sub(r'[^}]*$', '', json_str[::-1])[::-1]
+                    else:
+                        return format_response(
+                            error="Could not find valid JSON in AI response. Please rephrase your instruction.",
+                            data={'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response},
+                            status=500
+                        )
+                except:
                     return format_response(
-                        error=f"Could not parse instruction. AI response: {ai_response[:200]}...", 
+                        error="Could not parse AI response. Please rephrase your instruction.",
+                        data={'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response},
                         status=500
                     )
+            else:
+                # Extract the JSON string
+                json_str = json_match.group(1) if json_match.groups() else json_match.group(0)
+
+            try:
+                parsed_data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                print(f"Attempted to parse: {json_str}")
+                return format_response(
+                    error=f"Invalid JSON in AI response: {str(e)}",
+                    data={
+                        'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response,
+                        'attempted_json': json_str
+                    },
+                    status=500
+                )
+
+            # Extract explanation (everything after the JSON)
+            if json_match and hasattr(json_match, 'end'):
+                explanation_start = json_match.end()
+                explanation = ai_response[explanation_start:].strip()
+            else:
+                explanation = "Operation processed successfully."
+
+            # Clean up explanation if it starts with ```
+            if explanation.startswith('```'):
+                explanation = explanation.split('\n', 1) if '\n' in explanation else explanation[3:]
+
+            # Extract explanation (everything after the JSON)
+            explanation_start = json_match.end()
+            explanation = ai_response[explanation_start:].strip()
             
-            # Validate the parsed data structure
-            if not isinstance(parsed_data, dict):
-                return format_response(error="Invalid response structure", status=500)
-                
-            # Ensure required keys exist
-            required_keys = ["operation", "fields", "filters", "missing_fields", "resource_id"]
+            # Clean up explanation if it starts with ```
+            if explanation.startswith('```'):
+                # Remove the leading ```
+                explanation = explanation[3:]
+                # If there's a newline, remove it as well
+                if explanation.startswith('\n'):
+                    explanation = explanation[1:]
+            
+            # Validate parsed data structure
+            required_keys = ["operation", "fields", "filters", "missing_fields"]
             for key in required_keys:
                 if key not in parsed_data:
-                    parsed_data[key] = [] if key == "missing_fields" else ({} if key in ["fields", "filters"] else None)
+                    parsed_data[key] = [] if key == "missing_fields" else {}
             
             # Check for missing fields
             if parsed_data.get('missing_fields'):
                 return format_response(
                     data={
                         'missing_fields': parsed_data['missing_fields'],
-                        'message': f"Please provide the following fields: {', '.join(parsed_data['missing_fields'])}"
+                        'message': f"## Missing Required Fields\n\nPlease provide the following fields:\n\n" + 
+                                   "\n".join([f"- **{field}**" for field in parsed_data['missing_fields']]),
+                        'explanation': explanation,
+                        'confidence': parsed_data.get('confidence', 'low'),
+                        'instruction_received': instruction
                     },
                     status=400
                 )
             
-            # Execute the operation
+            # Execute the operation based on parsed data
             operation = parsed_data.get('operation', '').upper()
             
-            if operation == 'CREATE':
-                return self._execute_create(parsed_data.get('fields', {}), user_data)
-            elif operation == 'READ':
-                return self._execute_read(parsed_data.get('filters', {}))
-            elif operation == 'UPDATE':
-                return self._execute_update_bulk(
-                    parsed_data.get('filters', {}),
-                    parsed_data.get('fields', {}),
-                    user_data
+            try:
+                if operation == 'CREATE':
+                    result = self._execute_create(parsed_data.get('fields', {}), user_data)
+                elif operation == 'READ':
+                    result = self._execute_read(parsed_data.get('filters', {}))
+                elif operation == 'UPDATE':
+                    result = self._execute_update_bulk(
+                        parsed_data.get('filters', {}),
+                        parsed_data.get('fields', {}),
+                        user_data
+                    )
+                elif operation == 'DELETE':
+                    result = self._execute_delete_bulk(parsed_data.get('filters', {}))
+                else:
+                    return format_response(
+                        error=f"Unsupported operation: {operation}",
+                        data={'explanation': explanation},
+                        status=400
+                    )
+                
+                # Enhance the result with AI explanation
+                if hasattr(result, 'json') and result.json:
+                    result_data = result.json
+                    if 'message' in result_data:
+                        result_data['message'] = f"{result_data['message']}\n\n## AI Analysis\n\n{explanation}"
+                    else:
+                        result_data['explanation'] = explanation
+                    
+                    result_data['operation_details'] = {
+                        'operation': operation,
+                        'confidence': parsed_data.get('confidence', 'medium'),
+                        'estimated_affected': parsed_data.get('estimated_affected_records', 0),
+                        'instruction_received': instruction
+                    }
+                    
+                return result
+                
+            except Exception as e:
+                return format_response(
+                    error=f"Operation execution failed: {str(e)}",
+                    data={
+                        'explanation': explanation,
+                        'operation': operation,
+                        'instruction': instruction
+                    },
+                    status=500
                 )
-            elif operation == 'DELETE':
-                return self._execute_delete_bulk(parsed_data.get('filters', {}))
-            else:
-                return format_response(error=f"Unknown operation: {operation}", status=400)
             
         except Exception as e:
             print(f"Natural CRUD error: {e}")
-            return format_response(error=f"Natural CRUD failed: {str(e)}", status=500)
-
+            return format_response(error=f"Natural CRUD processing failed: {str(e)}", status=500)
+    
     def _call_groq_api(self, prompt):
-        """Call Groq API with better error handling"""
+        """Enhanced Groq API call with better error handling and retry logic"""
         try:
             payload = {
                 "model": "llama3-8b-8192",
                 "messages": [
                     {
                         "role": "system", 
-                        "content": "You are a precise database operation parser. Always respond with valid JSON only."
+                        "content": "You are a professional assistant for campus asset management. Provide detailed, well-formatted responses using markdown. Be precise and helpful."
                     },
                     {
                         "role": "user", 
                         "content": prompt
                     }
                 ],
-                "max_tokens": 500,
-                "temperature": 0.1
+                "max_tokens": 2000,  # Increased for more detailed responses
+                "temperature": 0.1,
+                "top_p": 0.9
             }
             
-            response = requests.post(self.groq_url, headers=self.headers, json=payload, timeout=30)
+            response = requests.post(
+                self.groq_url, 
+                headers=self.headers, 
+                json=payload, 
+                timeout=30
+            )
             response.raise_for_status()
             
             result = response.json()
+            print(f"Groq API response structure: {result}")  # Debug line
+            
             if 'choices' in result and len(result['choices']) > 0:
+                # FIX: choices is a list, so access the first element with [0]
                 return result['choices'][0]['message']['content'].strip()
             else:
                 print(f"Unexpected Groq response structure: {result}")
@@ -816,35 +1514,56 @@ class AIService:
         except requests.exceptions.Timeout:
             print("Groq API timeout")
             return None
+        except requests.exceptions.HTTPError as e:
+            print(f"Groq API HTTP error: {e}")
+            if hasattr(e.response, 'text'):
+                print(f"Response: {e.response.text}")
+            return None
         except requests.exceptions.RequestException as e:
             print(f"Groq API request error: {e}")
             return None
         except Exception as e:
-            print(f"Groq API error: {e}")
+            print(f"Groq API unexpected error: {e}")
             return None
 
+    
     def _execute_create(self, fields, user_data):
-        """Execute CREATE operation"""
+        """Execute CREATE operation with validation"""
         try:
+            # Validate required fields
+            required_fields = ['sl_no', 'description', 'service_tag', 'identification_number', 'procurement_date', 'cost', 'location', 'department']
+            missing_fields = [field for field in required_fields if field not in fields or not fields[field]]
+            
+            if missing_fields:
+                return format_response(
+                    error=f"Missing required fields: {', '.join(missing_fields)}",
+                    status=400
+                )
+            
+            # Prepare resource document
             resource_doc = {
-                'sl_no': fields.get('sl_no'),
-                'description': fields.get('description'),
-                'service_tag': fields.get('service_tag'),
-                'identification_number': fields.get('identification_number'),
-                'procurement_date': fields.get('procurement_date'),
-                'cost': float(fields.get('cost', 0)),
-                'location': fields.get('location'),
-                'department': fields.get('department'),
+                'sl_no': str(fields['sl_no']),
+                'description': fields['description'],
+                'service_tag': fields['service_tag'],
+                'identification_number': fields['identification_number'],
+                'procurement_date': fields['procurement_date'],
+                'cost': float(fields['cost']),
+                'location': fields['location'],
+                'department': fields['department'],
                 'created_by': user_data['email'],
                 'created_at': datetime.datetime.utcnow(),
                 'updated_at': datetime.datetime.utcnow()
             }
             
+            # Insert resource
             result = db[RESOURCES_COLLECTION].insert_one(resource_doc)
             
             return format_response(
-                data={'resource_id': str(result.inserted_id)},
-                message="Resource created successfully via AI",
+                data={
+                    'resource_id': str(result.inserted_id),
+                    'created_resource': resource_doc
+                },
+                message=f"## ✅ Resource Created Successfully\n\n**Resource ID:** {str(result.inserted_id)}\n**Description:** {fields['description']}\n**Department:** {fields['department']}\n**Location:** {fields['location']}\n**Cost:** ₹{fields['cost']:,.2f}",
                 status=201
             )
             
@@ -852,8 +1571,85 @@ class AIService:
             return format_response(error=f"Create operation failed: {str(e)}", status=400)
     
     def _execute_read(self, filters):
-        """Execute READ operation"""
+        """Execute READ operation with enhanced formatting"""
         try:
+            # Build query from filters
+            query = {}
+            for key, value in filters.items():
+                if key in ['location', 'department', 'description']:
+                    query[key] = {'$regex': value, '$options': 'i'}
+                elif key == 'cost':
+                    try:
+                        query[key] = float(value)
+                    except:
+                        query[key] = {'$regex': str(value), '$options': 'i'}
+                else:
+                    query[key] = value
+            
+            # Get resources
+            resources = list(db[RESOURCES_COLLECTION].find(query).limit(50))
+            
+            # Format resources for display
+            formatted_resources = []
+            total_cost = 0
+            
+            for resource in resources:
+                formatted_resource = {
+                    'id': str(resource['_id']),
+                    'sl_no': resource.get('sl_no'),
+                    'description': resource.get('description'),
+                    'service_tag': resource.get('service_tag'),
+                    'identification_number': resource.get('identification_number'),
+                    'procurement_date': resource.get('procurement_date'),
+                    'cost': float(resource.get('cost', 0)),
+                    'location': resource.get('location'),
+                    'department': resource.get('department'),
+                    'created_at': resource.get('created_at').isoformat() if resource.get('created_at') else None,
+                    'updated_at': resource.get('updated_at').isoformat() if resource.get('updated_at') else None
+                }
+                formatted_resources.append(formatted_resource)
+                total_cost += formatted_resource['cost']
+            
+            # Create formatted message
+            if len(resources) == 0:
+                message = "## 🔍 No Resources Found\n\nNo resources match the specified criteria."
+            else:
+                message = f"## 📋 Found {len(resources)} Resource(s)\n\n"
+                message += f"**Total Value:** ₹{total_cost:,.2f}\n\n"
+                
+                if len(resources) <= 10:
+                    message += "### Resource Details:\n\n"
+                    for i, resource in enumerate(formatted_resources, 1):
+                        message += f"**{i}. {resource['description']}**\n"
+                        message += f"   - **SL No:** {resource['sl_no']}\n"
+                        message += f"   - **Department:** {resource['department']}\n"
+                        message += f"   - **Location:** {resource['location']}\n"
+                        message += f"   - **Cost:** ₹{resource['cost']:,.2f}\n"
+                        message += f"   - **Service Tag:** {resource['service_tag']}\n\n"
+                else:
+                    message += f"### Summary (showing first 10 of {len(resources)} resources):\n\n"
+                    for i, resource in enumerate(formatted_resources[:10], 1):
+                        message += f"{i}. **{resource['description']}** - {resource['department']} - ₹{resource['cost']:,.2f}\n"
+            
+            return format_response(
+                data=formatted_resources,
+                message=message,
+                status=200
+            )
+            
+        except Exception as e:
+            return format_response(error=f"Read operation failed: {str(e)}", status=400)
+    
+    def _execute_update_bulk(self, filters, fields, user_data):
+        """Execute bulk UPDATE operation with detailed feedback"""
+        try:
+            if not filters:
+                return format_response(error="No filters provided for update operation", status=400)
+            
+            if not fields:
+                return format_response(error="No fields provided for update operation", status=400)
+            
+            # Build query from filters
             query = {}
             for key, value in filters.items():
                 if key in ['location', 'department', 'description']:
@@ -861,26 +1657,7 @@ class AIService:
                 else:
                     query[key] = value
             
-            resources = list(db[RESOURCES_COLLECTION].find(query).limit(10))
-            
-            for resource in resources:
-                resource['_id'] = str(resource['_id'])
-                if 'created_at' in resource:
-                    resource['created_at'] = resource['created_at'].isoformat()
-                if 'updated_at' in resource:
-                    resource['updated_at'] = resource['updated_at'].isoformat()
-            
-            return format_response(data=resources, status=200)
-            
-        except Exception as e:
-            return format_response(error=f"Read operation failed: {str(e)}", status=400)
-    
-    def _execute_update(self, resource_id, fields, user_data):
-        """Execute UPDATE operation"""
-        try:
-            if not resource_id or not ObjectId.is_valid(resource_id):
-                return format_response(error="Invalid resource ID", status=400)
-            
+            # Prepare update data
             update_data = {k: v for k, v in fields.items() if v is not None}
             if 'cost' in update_data:
                 update_data['cost'] = float(update_data['cost'])
@@ -888,114 +1665,94 @@ class AIService:
             update_data['updated_at'] = datetime.datetime.utcnow()
             update_data['updated_by'] = user_data['email']
             
-            result = db[RESOURCES_COLLECTION].update_one(
-                {'_id': ObjectId(resource_id)},
-                {'$set': update_data}
-            )
+            # Get resources that will be updated (for reporting)
+            resources_to_update = list(db[RESOURCES_COLLECTION].find(query))
             
-            if result.matched_count == 0:
-                return format_response(error="Resource not found", status=404)
+            # Update resources
+            result = db[RESOURCES_COLLECTION].update_many(query, {'$set': update_data})
             
-            return format_response(message="Resource updated successfully via AI", status=200)
+            # Create detailed message
+            message = f"## ✅ Bulk Update Completed\n\n"
+            message += f"**Resources Updated:** {result.modified_count} out of {result.matched_count} matched\n"
+            message += f"**Fields Updated:** {', '.join(fields.keys())}\n\n"
             
-        except Exception as e:
-            return format_response(error=f"Update operation failed: {str(e)}", status=400)
-    
-    def _execute_delete(self, resource_id):
-        """Execute DELETE operation"""
-        try:
-            if not resource_id or not ObjectId.is_valid(resource_id):
-                return format_response(error="Invalid resource ID", status=400)
-            
-            result = db[RESOURCES_COLLECTION].delete_one({'_id': ObjectId(resource_id)})
-            
-            if result.deleted_count == 0:
-                return format_response(error="Resource not found", status=404)
-            
-            return format_response(message="Resource deleted successfully via AI", status=200)
-            
-        except Exception as e:
-            return format_response(error=f"Delete operation failed: {str(e)}", status=400)
-    
-    def chat(self, data, request):
-        """Handle chat queries about resources"""
-        try:
-            message = data.get('message')
-            user_data = get_user_from_token(request)
-            
-            # Get context about resources
-            context = self._get_resource_context()
-            
-            # Create chat prompt
-            chat_prompt = f"""
-            You are a resource management assistant. Answer questions about the resources based on the following context:
-            
-            Context: {context}
-            
-            User question: {message}
-            
-            Provide a helpful and accurate response about the resources. If you need specific data that's not in the context, ask for clarification.
-            """
-            
-            ai_response = self._call_groq_api(chat_prompt)
-            
-            if not ai_response:
-                return format_response(error="Failed to get response", status=500)
-            
-            # Save chat history
-            chat_doc = {
-                'user_id': user_data['uid'],
-                'message': message,
-                'response': ai_response,
-                'timestamp': datetime.datetime.utcnow()
-            }
-            
-            db[CHAT_HISTORY_COLLECTION].insert_one(chat_doc)
+            if result.modified_count > 0 and len(resources_to_update) <= 10:
+                message += "### Updated Resources:\n\n"
+                for i, resource in enumerate(resources_to_update[:result.modified_count], 1):
+                    message += f"{i}. **{resource.get('description')}** ({resource.get('department')})\n"
             
             return format_response(
                 data={
-                    'response': ai_response,
-                    'timestamp': datetime.datetime.utcnow().isoformat()
+                    'matched_count': result.matched_count,
+                    'modified_count': result.modified_count,
+                    'filters_used': filters,
+                    'fields_updated': fields,
+                    'updated_resources': [str(r['_id']) for r in resources_to_update[:result.modified_count]]
                 },
+                message=message,
                 status=200
             )
             
         except Exception as e:
-            return format_response(error=f"Chat failed: {str(e)}", status=500)
+            return format_response(error=f"Bulk update operation failed: {str(e)}", status=400)
     
-    def _get_resource_context(self):
-        """Get context about current resources"""
+    def _execute_delete_bulk(self, filters):
+        """Execute bulk DELETE operation with detailed feedback"""
         try:
-            total_resources = db[RESOURCES_COLLECTION].count_documents({})
+            if not filters:
+                return format_response(error="No filters provided for delete operation", status=400)
             
-            # Get sample resources
-            sample_resources = list(db[RESOURCES_COLLECTION].find().limit(5))
+            # Build query from filters
+            query = {}
+            for key, value in filters.items():
+                if key in ['location', 'department', 'description']:
+                    query[key] = {'$regex': value, '$options': 'i'}
+                else:
+                    query[key] = value
             
-            # Get stats
-            locations = db[RESOURCES_COLLECTION].distinct('location')
-            departments = db[RESOURCES_COLLECTION].distinct('department')
+            # Get resources that will be deleted (for reporting)
+            resources_to_delete = list(db[RESOURCES_COLLECTION].find(query))
             
-            context = {
-                'total_resources': total_resources,
-                'locations': locations,
-                'departments': departments,
-                'sample_resources': [
-                    {
-                        'description': r.get('description'),
-                        'location': r.get('location'),
-                        'department': r.get('department'),
-                        'cost': r.get('cost')
-                    } for r in sample_resources
-                ]
-            }
+            if len(resources_to_delete) == 0:
+                return format_response(
+                    error="No resources found matching the delete criteria",
+                    status=404
+                )
             
-            return json.dumps(context, indent=2)
+            # Delete resources
+            result = db[RESOURCES_COLLECTION].delete_many(query)
+            
+            # Create detailed message
+            message = f"## ⚠️ Bulk Delete Completed\n\n"
+            message += f"**Resources Deleted:** {result.deleted_count}\n\n"
+            
+            if len(resources_to_delete) <= 10:
+                message += "### Deleted Resources:\n\n"
+                for i, resource in enumerate(resources_to_delete, 1):
+                    message += f"{i}. **{resource.get('description')}** - {resource.get('department')} - ₹{resource.get('cost', 0):,.2f}\n"
+            
+            return format_response(
+                data={
+                    'deleted_count': result.deleted_count,
+                    'filters_used': filters,
+                    'deleted_resources': [
+                        {
+                            'id': str(r['_id']),
+                            'description': r.get('description'),
+                            'department': r.get('department'),
+                            'cost': r.get('cost')
+                        } for r in resources_to_delete
+                    ]
+                },
+                message=message,
+                status=200
+            )
             
         except Exception as e:
-            return "No resource context available"
+            return format_response(error=f"Bulk delete operation failed: {str(e)}", status=400)
     
     def chat_history(self, user_id, page, limit, request):
-        """Get chat history"""
+        """Get chat history with enhanced formatting"""
         try:
             user_data = get_user_from_token(request)
             
@@ -1021,82 +1778,7 @@ class AIService:
             
         except Exception as e:
             return format_response(error=f"Failed to fetch chat history: {str(e)}", status=400)
-    def _execute_update_bulk(self, filters, fields, user_data):
-        """Execute UPDATE operation on multiple resources"""
-        try:
-            if not filters:
-                return format_response(error="No filters provided for update", status=400)
-            
-            if not fields:
-                return format_response(error="No fields provided for update", status=400)
-            
-            # Build query from filters
-            query = {}
-            for key, value in filters.items():
-                if key in ['location', 'department', 'description']:
-                    query[key] = {'$regex': value, '$options': 'i'}
-                else:
-                    query[key] = value
-            
-            # Prepare update data
-            update_data = {k: v for k, v in fields.items() if v is not None}
-            if 'cost' in update_data:
-                update_data['cost'] = float(update_data['cost'])
-            
-            update_data['updated_at'] = datetime.datetime.utcnow()
-            update_data['updated_by'] = user_data['email']
-            
-            # Update resources
-            result = db[RESOURCES_COLLECTION].update_many(query, {'$set': update_data})
-            
-            return format_response(
-                data={
-                    'matched_count': result.matched_count,
-                    'modified_count': result.modified_count,
-                    'filters_used': filters,
-                    'fields_updated': fields
-                },
-                message=f"Updated {result.modified_count} resources via AI",
-                status=200
-            )
-            
-        except Exception as e:
-            return format_response(error=f"Bulk update operation failed: {str(e)}", status=400)
 
-    def _execute_delete_bulk(self, filters):
-        """Execute DELETE operation on multiple resources"""
-        try:
-            if not filters:
-                return format_response(error="No filters provided for delete", status=400)
-            
-            # Build query from filters
-            query = {}
-            for key, value in filters.items():
-                if key in ['location', 'department', 'description']:
-                    query[key] = {'$regex': value, '$options': 'i'}
-                else:
-                    query[key] = value
-            
-            # Count resources to be deleted
-            count = db[RESOURCES_COLLECTION].count_documents(query)
-            
-            if count == 0:
-                return format_response(error="No resources found matching the criteria", status=404)
-            
-            # Delete resources
-            result = db[RESOURCES_COLLECTION].delete_many(query)
-            
-            return format_response(
-                data={
-                    'deleted_count': result.deleted_count,
-                    'filters_used': filters
-                },
-                message=f"Deleted {result.deleted_count} resources via AI",
-                status=200
-            )
-            
-        except Exception as e:
-            return format_response(error=f"Bulk delete operation failed: {str(e)}", status=400)
 
 class FileService:
     def upload_csv(self, file, request):

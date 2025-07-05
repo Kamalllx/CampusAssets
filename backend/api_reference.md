@@ -3,7 +3,7 @@
 ## Base URL
 
 - Development: http://127.0.0.1:5000
-- Production: https://your-backend-domain.com
+- Production: https://campusassets.onrender.com
 
 ## Authentication
 

@@ -107,31 +107,3 @@ USERS_COLLECTION = 'users'
 RESOURCES_COLLECTION = 'resources'
 SESSIONS_COLLECTION = 'sessions'
 CHAT_HISTORY_COLLECTION = 'chat_history'
-# Add this section to your config.py
-
-# MongoDB setup with your specific connection
-MONGODB_URI = os.getenv('MONGODB_URI', 'mongodb+srv://kamalkarteek1:rvZSeyVHhgOd2fbE@gbh.iliw2.mongodb.net/')
-DATABASE_NAME = os.getenv('DATABASE_NAME', 'campus_assets')
-
-# MongoDB setup
-db = None
-try:
-    if MONGODB_URI:
-        client = MongoClient(MONGODB_URI)
-        # Use the specific database name
-        db = client[DATABASE_NAME]
-        # Test connection
-        db.command('ping')
-        print(f"✅ MongoDB connection successful to database: {DATABASE_NAME}")
-        print(f"✅ Available collections: {db.list_collection_names()}")
-    else:
-        print("❌ MONGODB_URI not provided")
-except Exception as e:
-    print(f"❌ MongoDB connection failed: {e}")
-    print("Please check your MongoDB connection string")
-
-# Collections (make sure these match your database)
-USERS_COLLECTION = 'users'
-RESOURCES_COLLECTION = 'resources'  # This should match your collection name
-SESSIONS_COLLECTION = 'sessions'
-CHAT_HISTORY_COLLECTION = 'chat_history'
