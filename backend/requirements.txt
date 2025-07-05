@@ -9,3 +9,7 @@ openpyxl
 requests
 email-validator
 Werkzeug
+fpdf
+matplotlib
+numpy
+
