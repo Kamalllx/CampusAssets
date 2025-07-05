@@ -3,7 +3,8 @@ from flask_cors import CORS
 import traceback
 import datetime
 import uuid
-
+from reports import ReportService
+from flask import send_file, make_response
 # Import everything from our modules
 from config import (
     FLASK_SECRET_KEY, ADMIN_ROLE, VIEWER_ROLE, db,
@@ -211,7 +212,70 @@ def export_excel():
         return format_response(error="Excel export failed", status=400)
 
 # ==================== AI ROUTES ====================
+# Add this route after your existing routes
+@app.route('/api/report/comprehensive-pdf', methods=['GET'])
+@login_required
+def generate_comprehensive_report():
+    """Generate comprehensive PDF report"""
+    try:
+        report_service = ReportService()
+        
+        # Generate the PDF report
+        pdf_buffer = report_service.generate_comprehensive_report()
+        
+        # Clean up temporary files
+        report_service.cleanup()
+        
+        # Create response
+        response = make_response(pdf_buffer.read())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=campus_assets_comprehensive_report_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        app.logger.error(f"Report generation error: {str(e)}")
+        return format_response(error=f"Failed to generate report: {str(e)}", status=500)
 
+# Also add a simple summary report route
+@app.route('/api/report/summary-pdf', methods=['GET'])
+@login_required  
+def generate_summary_report():
+    """Generate summary PDF report"""
+    try:
+        from fpdf import FPDF
+        from io import BytesIO
+        
+        # Fetch basic stats
+        resources = list(db[RESOURCES_COLLECTION].find({}))
+        total_resources = len(resources)
+        total_cost = sum(float(r.get('cost', 0)) for r in resources)
+        
+        # Create simple PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font('Arial', 'B', 16)
+        pdf.cell(0, 10, 'Campus Assets Summary Report', 0, 1, 'C')
+        pdf.ln(10)
+        
+        pdf.set_font('Arial', '', 12)
+        pdf.cell(0, 8, f'Total Resources: {total_resources}', 0, 1)
+        pdf.cell(0, 8, f'Total Value: Rs.{total_cost:,.2f}', 0, 1)
+        pdf.cell(0, 8, f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1)
+        
+        # Output PDF
+        pdf_output = BytesIO()
+        pdf.output(pdf_output)
+        pdf_output.seek(0)
+        
+        response = make_response(pdf_output.read())
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename=campus_assets_summary_{datetime.datetime.now().strftime("%Y%m%d")}.pdf'
+        
+        return response
+        
+    except Exception as e:
+        return format_response(error=f"Failed to generate summary report: {str(e)}", status=500)
 @app.route('/api/ai/natural-crud', methods=['POST'])
 @login_required
 @admin_required

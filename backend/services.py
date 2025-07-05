@@ -1179,7 +1179,6 @@ class AIService:
         except Exception as e:
             print(f"Error getting resource context: {e}")
             return json.dumps({"error": str(e), "total_resources": 0, "all_resources": []})
-    
     def chat(self, data, request):
         """Handle chat queries about resources with enhanced context and formatted answers"""
         try:
@@ -1191,31 +1190,41 @@ class AIService:
             
             # Get comprehensive context about ALL resources
             context = self._get_resource_context()
+            context_data = json.loads(context)
             
             # Create enhanced chat prompt for better formatted responses
             chat_prompt = f"""
-You are a professional and knowledgeable assistant for a Campus Assets Management System. You have access to real-time data about all campus resources.
+    You are a professional campus assets management assistant. You have access to REAL-TIME data from the database.
 
-## Current Database Context:
-{context}
+    IMPORTANT: Base your answers ONLY on the exact data provided below. Do NOT make assumptions or hallucinate data.
 
-## User Question:
-{message}
+    === CURRENT DATABASE DATA ===
+    Total Resources: {context_data.get('total_resources', 0)}
+    Total Cost: ₹{context_data.get('total_cost', 0):,.2f}
 
-## Instructions:
-Please provide a comprehensive, well-formatted response using markdown. Follow these guidelines:
+    All Resources in Database:
+    {json.dumps(context_data.get('all_resources', []), indent=2)}
 
-1. **Structure your response clearly** with headers, bullet points, and sections
-2. **Be specific and detailed** - reference actual data from the context
-3. **Use tables** when comparing multiple items or showing statistics
-4. **Include relevant metrics** like costs, counts, percentages when applicable
-5. **Provide actionable insights** and recommendations when possible
-6. **Format numbers properly** (e.g., ₹35,000 for currency)
-7. **Use emojis sparingly** for better readability
+    Department Statistics:
+    {json.dumps(context_data.get('department_statistics', {}), indent=2)}
 
-## Response Format:
-Start with a brief summary, then provide detailed analysis with proper markdown formatting.
-"""
+    Location Statistics:
+    {json.dumps(context_data.get('location_statistics', {}), indent=2)}
+
+    === USER QUESTION ===
+    {message}
+
+    === RESPONSE INSTRUCTIONS ===
+    1. **Be ACCURATE**: Use ONLY the exact data provided above
+    2. **Be SPECIFIC**: Reference actual items, costs, and details from the data
+    3. **Use Emojis**: Make responses engaging with relevant emojis
+    4. **Format Well**: Use headers, tables, bullet points, and proper markdown
+    5. **Be Comprehensive**: Provide detailed analysis when relevant
+    6. **Show Calculations**: When discussing costs or counts, show your work
+
+    === RESPONSE FORMAT ===
+    Start with a catchy emoji and title, then provide detailed analysis with proper markdown formatting.
+    """
             
             ai_response = self._call_groq_api(chat_prompt)
             
@@ -1223,21 +1232,24 @@ Start with a brief summary, then provide detailed analysis with proper markdown 
                 return format_response(error="Failed to get AI response", status=500)
             
             # Save chat history to database
-            chat_doc = {
-                'user_id': user_data['uid'],
-                'message': message,
-                'response': ai_response,
-                'timestamp': datetime.datetime.utcnow(),
-                'context_resources_count': json.loads(context).get('total_resources', 0)
-            }
-            
-            db[CHAT_HISTORY_COLLECTION].insert_one(chat_doc)
+            try:
+                chat_doc = {
+                    'user_id': user_data['uid'],
+                    'message': message,
+                    'response': ai_response,
+                    'timestamp': datetime.datetime.utcnow(),
+                    'context_resources_count': context_data.get('total_resources', 0)
+                }
+                
+                db[CHAT_HISTORY_COLLECTION].insert_one(chat_doc)
+            except Exception as e:
+                print(f"Failed to save chat history: {e}")
             
             return format_response(
                 data={
                     'response': ai_response,
                     'timestamp': datetime.datetime.utcnow().isoformat(),
-                    'resources_analyzed': json.loads(context).get('total_resources', 0)
+                    'resources_analyzed': context_data.get('total_resources', 0)
                 },
                 status=200
             )
@@ -1245,7 +1257,7 @@ Start with a brief summary, then provide detailed analysis with proper markdown 
         except Exception as e:
             print(f"Chat error: {e}")
             return format_response(error=f"Chat failed: {str(e)}", status=500)
-    
+  
     def natural_crud(self, data, request):
         """Process natural language CRUD instructions with enhanced context and detailed explanations"""
         try:
@@ -1260,143 +1272,63 @@ Start with a brief summary, then provide detailed analysis with proper markdown 
             
             # Enhanced parsing prompt with detailed context and explanation request
             parsing_prompt = f"""
-You are an advanced database operation parser for a Campus Assets Management System.
+    You are an advanced database operation parser for a Campus Assets Management System.
 
-## Current Database Context:
-{context}
+    Current Database Context:
+    {context}
 
-## User Instruction:
-"{instruction}"
+    User Instruction: "{instruction}"
 
-## Your Tasks:
-1. **Parse the instruction** and determine the database operation needed
-2. **Extract relevant information** from the instruction
-3. **Validate against current data** using the provided context
-4. **Provide detailed explanation** of what will be done
+    Analyze the instruction and respond with ONLY a valid JSON object in this exact format:
+    {{
+        "operation": "CREATE|READ|UPDATE|DELETE",
+        "fields": {{}},
+        "filters": {{}},
+        "missing_fields": [],
+        "resource_id": null,
+        "confidence": "high|medium|low",
+        "estimated_affected_records": 0
+    }}
 
-## Response Format:
-First, provide a JSON object with the following structure:
+    Rules:
+    - For UPDATE: Use "filters" to find resources and "fields" for new values
+    - For READ: Use "filters" to search
+    - For CREATE: Put all new data in "fields"
+    - For DELETE: Use "filters" to identify resources to delete
+    - If "last entered item" is mentioned, use the most recent created_at timestamp
+    - Be precise with numbers and exact matches
 
-
-```
-{
-"operation": "CREATE|READ|UPDATE|DELETE",
-"fields": {
-"field_name": "value"
-},
-"filters": {
-"field_name": "value"
-},
-"missing_fields": ["field1", "field2"],
-"resource_id": "string_or_null",
-"confidence": "high|medium|low",
-"estimated_affected_records": number
-}
-```
-
-Then provide a comprehensive markdown explanation including:
-- **Operation Summary**: What operation will be performed
-- **Target Resources**: Which resources will be affected (be specific)
-- **Changes Made**: Detailed description of changes
-- **Validation Notes**: Any important considerations or warnings
-- **Expected Outcome**: What the result will be
-
-## Required Fields for CREATE operations:
-sl_no, description, service_tag, identification_number, procurement_date, cost, location, department
-
-## Available Departments: {', '.join(json.loads(context).get('departments', []))}
-## Available Locations: {', '.join(json.loads(context).get('locations', []))}
-"""
+    Examples:
+    - "update cost of last entered item to 500000" → {{"operation": "UPDATE", "filters": {{"created_at": "latest"}}, "fields": {{"cost": 500000}}}}
+    - "show items in CSE department" → {{"operation": "READ", "filters": {{"department": "CSE"}}}}
+    """
             
             ai_response = self._call_groq_api(parsing_prompt)
             
             if not ai_response:
                 return format_response(error="Failed to process instruction with AI", status=500)
             
-            # Extract JSON and explanation from AI response
-# Extract JSON and explanation from AI response
-            import re
-
-            # Try to find JSON in code blocks first
-            json_match = re.search(r'```json\s*\n(.*?)\n```')
-            if not json_match:
-                # Try to find JSON without code blocks
-                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', ai_response, re.DOTALL)
-
-            if not json_match:
-                # If no JSON found, try a different approach
-                try:
-                    # Look for any content that looks like JSON
-                    lines = ai_response.split('\n')
-                    json_lines = []
-                    in_json = False
-                    
-                    for line in lines:
-                        if '{' in line and not in_json:
-                            in_json = True
-                            json_lines.append(line)
-                        elif in_json:
-                            json_lines.append(line)
-                            if '}' in line and line.count('}') >= line.count('{'):
-                                break
-                    
-                    if json_lines:
-                        json_str = '\n'.join(json_lines)
-                        # Clean up the JSON string
-                        json_str = re.sub(r'^[^{]*', '', json_str)
-                        json_str = re.sub(r'[^}]*$', '', json_str[::-1])[::-1]
-                    else:
-                        return format_response(
-                            error="Could not find valid JSON in AI response. Please rephrase your instruction.",
-                            data={'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response},
-                            status=500
-                        )
-                except:
-                    return format_response(
-                        error="Could not parse AI response. Please rephrase your instruction.",
-                        data={'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response},
-                        status=500
-                    )
-            else:
-                # Extract the JSON string
-                json_str = json_match.group(1) if json_match.groups() else json_match.group(0)
-
+            # Extract JSON more reliably
             try:
-                parsed_data = json.loads(json_str)
-            except json.JSONDecodeError as e:
-                print(f"JSON decode error: {e}")
-                print(f"Attempted to parse: {json_str}")
+                # Clean the AI response and extract JSON
+                cleaned_response = ai_response.strip()
+                
+                # Try to find JSON block
+                import re
+                json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', cleaned_response, re.DOTALL)
+                
+                if json_match:
+                    json_str = json_match.group(0)
+                    parsed_data = json.loads(json_str)
+                else:
+                    raise ValueError("No valid JSON found in AI response")
+                    
+            except (json.JSONDecodeError, ValueError) as e:
                 return format_response(
-                    error=f"Invalid JSON in AI response: {str(e)}",
-                    data={
-                        'ai_response': ai_response[:500] + '...' if len(ai_response) > 500 else ai_response,
-                        'attempted_json': json_str
-                    },
+                    error=f"Could not parse AI response: {str(e)}",
+                    data={'ai_response': ai_response[:500]},
                     status=500
                 )
-
-            # Extract explanation (everything after the JSON)
-            if json_match and hasattr(json_match, 'end'):
-                explanation_start = json_match.end()
-                explanation = ai_response[explanation_start:].strip()
-            else:
-                explanation = "Operation processed successfully."
-
-            # Clean up explanation if it starts with ```
-            if explanation.startswith('```'):
-                explanation = explanation.split('\n', 1) if '\n' in explanation else explanation[3:]
-
-            # Extract explanation (everything after the JSON)
-            explanation_start = json_match.end()
-            explanation = ai_response[explanation_start:].strip()
-            
-            # Clean up explanation if it starts with ```
-            if explanation.startswith('```'):
-                # Remove the leading ```
-                explanation = explanation[3:]
-                # If there's a newline, remove it as well
-                if explanation.startswith('\n'):
-                    explanation = explanation[1:]
             
             # Validate parsed data structure
             required_keys = ["operation", "fields", "filters", "missing_fields"]
@@ -1404,19 +1336,15 @@ sl_no, description, service_tag, identification_number, procurement_date, cost, 
                 if key not in parsed_data:
                     parsed_data[key] = [] if key == "missing_fields" else {}
             
-            # Check for missing fields
-            if parsed_data.get('missing_fields'):
-                return format_response(
-                    data={
-                        'missing_fields': parsed_data['missing_fields'],
-                        'message': f"## Missing Required Fields\n\nPlease provide the following fields:\n\n" + 
-                                   "\n".join([f"- **{field}**" for field in parsed_data['missing_fields']]),
-                        'explanation': explanation,
-                        'confidence': parsed_data.get('confidence', 'low'),
-                        'instruction_received': instruction
-                    },
-                    status=400
-                )
+            # Handle "latest" filter for last entered item
+            if parsed_data.get('filters', {}).get('created_at') == 'latest':
+                # Find the most recent resource
+                latest_resource = db[RESOURCES_COLLECTION].find().sort('created_at', -1).limit(1)
+                latest_resource = list(latest_resource)
+                if latest_resource:
+                    parsed_data['filters'] = {'_id': latest_resource[0]['_id']}
+                else:
+                    return format_response(error="No resources found in database", status=404)
             
             # Execute the operation based on parsed data
             operation = parsed_data.get('operation', '').upper()
@@ -1437,32 +1365,15 @@ sl_no, description, service_tag, identification_number, procurement_date, cost, 
                 else:
                     return format_response(
                         error=f"Unsupported operation: {operation}",
-                        data={'explanation': explanation},
                         status=400
                     )
                 
-                # Enhance the result with AI explanation
-                if hasattr(result, 'json') and result.json:
-                    result_data = result.json
-                    if 'message' in result_data:
-                        result_data['message'] = f"{result_data['message']}\n\n## AI Analysis\n\n{explanation}"
-                    else:
-                        result_data['explanation'] = explanation
-                    
-                    result_data['operation_details'] = {
-                        'operation': operation,
-                        'confidence': parsed_data.get('confidence', 'medium'),
-                        'estimated_affected': parsed_data.get('estimated_affected_records', 0),
-                        'instruction_received': instruction
-                    }
-                    
                 return result
-                
+                    
             except Exception as e:
                 return format_response(
                     error=f"Operation execution failed: {str(e)}",
                     data={
-                        'explanation': explanation,
                         'operation': operation,
                         'instruction': instruction
                     },
@@ -1472,7 +1383,7 @@ sl_no, description, service_tag, identification_number, procurement_date, cost, 
         except Exception as e:
             print(f"Natural CRUD error: {e}")
             return format_response(error=f"Natural CRUD processing failed: {str(e)}", status=500)
-    
+
     def _call_groq_api(self, prompt):
         """Enhanced Groq API call with better error handling and retry logic"""
         try:
