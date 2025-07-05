@@ -1,62 +1,99 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Building2, IndianRupee, Package, TrendingUp, MapPin, Users, Activity } from "lucide-react"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Building2,
+  IndianRupee,
+  Package,
+  TrendingUp,
+  MapPin,
+  Users,
+  Activity,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 
 interface DashboardStats {
-  total_resources: number
-  total_cost: number
-  recent_additions: number
-  location_stats: Array<{ _id: string; count: number }>
-  department_stats: Array<{ _id: string; count: number }>
+  total_resources: number;
+  total_cost: number;
+  recent_additions: number;
+  location_stats: Array<{ _id: string; count: number }>;
+  department_stats: Array<{ _id: string; count: number }>;
 }
 
-const COLORS = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EF4444", "#06B6D4", "#84CC16", "#F97316"]
+const COLORS = [
+  "#3B82F6",
+  "#8B5CF6",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#06B6D4",
+  "#84CC16",
+  "#F97316",
+];
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState("")
-  const router = useRouter()
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem("session_token")
+    const token = localStorage.getItem("session_token");
     if (!token) {
-      router.push("/auth/login")
-      return
+      router.push("/auth/login");
+      return;
     }
 
-    fetchDashboardStats(token)
-  }, [router])
+    fetchDashboardStats(token);
+  }, [router]);
 
   const fetchDashboardStats = async (token: string) => {
     try {
-      const response = await fetch("https://campusassets.onrender.com/api/dashboard/stats", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+      const response = await fetch(
+        "https://campusassets.onrender.com/api/dashboard/stats",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.ok) {
-        const data = await response.json()
-        setStats(data.data)
+        const data = await response.json();
+        setStats(data.data);
       } else if (response.status === 401) {
-        localStorage.removeItem("session_token")
-        localStorage.removeItem("user_data")
-        router.push("/auth/login")
+        localStorage.removeItem("session_token");
+        localStorage.removeItem("user_data");
+        router.push("/auth/login");
       } else {
-        setError("Failed to fetch dashboard data")
+        setError("Failed to fetch dashboard data");
       }
     } catch (error) {
-      setError("Network error")
+      setError("Network error");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   if (isLoading) {
     return (
@@ -94,7 +131,7 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -106,7 +143,7 @@ export default function DashboardPage() {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   return (
@@ -114,59 +151,79 @@ export default function DashboardPage() {
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-3xl p-8 text-white shadow-2xl">
         <h1 className="text-3xl font-bold mb-2">Dashboard Overview</h1>
-        <p className="text-blue-100">Welcome back! Here's what's happening with your campus assets.</p>
+        <p className="text-blue-100">
+          Welcome back! Here's what's happening with your campus assets.
+        </p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <Card className="hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Total Resources</CardTitle>
+            <CardTitle className="text-sm font-medium text-blue-700">
+              Total Resources
+            </CardTitle>
             <div className="p-2 bg-blue-500 rounded-2xl">
               <Package className="h-5 w-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-900">{stats?.total_resources || 0}</div>
-            <p className="text-xs text-blue-600 mt-1">Assets under management</p>
+            <div className="text-3xl font-bold text-blue-900">
+              {stats?.total_resources || 0}
+            </div>
+            <p className="text-xs text-blue-600 mt-1">
+              Assets under management
+            </p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 bg-gradient-to-br from-green-50 to-green-100 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-green-700">Total Value</CardTitle>
+            <CardTitle className="text-sm font-medium text-green-700">
+              Total Value
+            </CardTitle>
             <div className="p-2 bg-green-500 rounded-2xl">
               <IndianRupee className="h-5 w-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-900">₹{stats?.total_cost?.toLocaleString() || 0}</div>
+            <div className="text-3xl font-bold text-green-900">
+              ₹{stats?.total_cost?.toLocaleString() || 0}
+            </div>
             <p className="text-xs text-green-600 mt-1">Combined asset value</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 bg-gradient-to-br from-purple-50 to-purple-100 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Recent Additions</CardTitle>
+            <CardTitle className="text-sm font-medium text-purple-700">
+              Recent Additions
+            </CardTitle>
             <div className="p-2 bg-purple-500 rounded-2xl">
               <TrendingUp className="h-5 w-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-900">{stats?.recent_additions || 0}</div>
+            <div className="text-3xl font-bold text-purple-900">
+              {stats?.recent_additions || 0}
+            </div>
             <p className="text-xs text-purple-600 mt-1">Added in last 7 days</p>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-0 bg-gradient-to-br from-orange-50 to-orange-100 rounded-3xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Locations</CardTitle>
+            <CardTitle className="text-sm font-medium text-orange-700">
+              Locations
+            </CardTitle>
             <div className="p-2 bg-orange-500 rounded-2xl">
               <MapPin className="h-5 w-5 text-white" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-orange-900">{stats?.location_stats?.length || 0}</div>
+            <div className="text-3xl font-bold text-orange-900">
+              {stats?.location_stats?.length || 0}
+            </div>
             <p className="text-xs text-orange-600 mt-1">Active locations</p>
           </CardContent>
         </Card>
@@ -180,11 +237,16 @@ export default function DashboardPage() {
               <BarChart className="mr-3 h-6 w-6 text-blue-600" />
               Resources by Location
             </CardTitle>
-            <CardDescription>Distribution of assets across locations</CardDescription>
+            <CardDescription>
+              Distribution of assets across locations
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={stats?.location_stats || []} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <BarChart
+                data={stats?.location_stats || []}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="_id" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
@@ -196,7 +258,11 @@ export default function DashboardPage() {
                     boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
                   }}
                 />
-                <Bar dataKey="count" fill="url(#blueGradient)" radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="count"
+                  fill="url(#blueGradient)"
+                  radius={[8, 8, 0, 0]}
+                />
                 <defs>
                   <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#3B82F6" />
@@ -214,7 +280,9 @@ export default function DashboardPage() {
               <Activity className="mr-3 h-6 w-6 text-purple-600" />
               Resources by Department
             </CardTitle>
-            <CardDescription>Asset distribution across departments</CardDescription>
+            <CardDescription>
+              Asset distribution across departments
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -224,13 +292,18 @@ export default function DashboardPage() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ _id, percent }) => `${_id} ${(percent * 100).toFixed(0)}%`}
+                  label={({ _id, percent }) =>
+                    `${_id} ${(percent * 100).toFixed(0)}%`
+                  }
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="count"
                 >
                   {(stats?.department_stats || []).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={COLORS[index % COLORS.length]}
+                    />
                   ))}
                 </Pie>
                 <Tooltip
@@ -260,9 +333,15 @@ export default function DashboardPage() {
                 <Building2 className="h-8 w-8 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">Top Location</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.location_stats?.[0]?._id || "N/A"}</p>
-                <p className="text-xs text-gray-500">{stats?.location_stats?.[0]?.count || 0} resources</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Top Location
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats?.location_stats?.[0]?._id || "N/A"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {stats?.location_stats?.[0]?.count || 0} resources
+                </p>
               </div>
             </div>
 
@@ -271,9 +350,15 @@ export default function DashboardPage() {
                 <Users className="h-8 w-8 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">Top Department</p>
-                <p className="text-2xl font-bold text-gray-900">{stats?.department_stats?.[0]?._id || "N/A"}</p>
-                <p className="text-xs text-gray-500">{stats?.department_stats?.[0]?.count || 0} resources</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Top Department
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats?.department_stats?.[0]?._id || "N/A"}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {stats?.department_stats?.[0]?.count || 0} resources
+                </p>
               </div>
             </div>
 
@@ -282,11 +367,15 @@ export default function DashboardPage() {
                 <IndianRupee className="h-8 w-8 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">Avg. Asset Value</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Avg. Asset Value
+                </p>
                 <p className="text-2xl font-bold text-gray-900">
                   ₹
                   {stats?.total_resources && stats?.total_cost
-                    ? Math.round(stats.total_cost / stats.total_resources).toLocaleString()
+                    ? Math.round(
+                        stats.total_cost / stats.total_resources
+                      ).toLocaleString()
                     : 0}
                 </p>
                 <p className="text-xs text-gray-500">Per resource</p>
@@ -296,5 +385,5 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

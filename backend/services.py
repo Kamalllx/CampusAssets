@@ -12,7 +12,7 @@ from bson.objectid import ObjectId
 from bson.errors import InvalidId
 import requests
 import json
-
+from dotenv import load_dotenv
 from config import (
     db, ADMIN_ROLE, VIEWER_ROLE, JWT_SECRET, GROQ_API_KEY, 
     SMTP_EMAIL, SMTP_PASSWORD, MASTER_EMAIL, SMTP_SERVER, SMTP_PORT,
@@ -22,7 +22,7 @@ from config import (
 )
 from firebase_admin import auth as firebase_auth
 from utils import format_response, validate_email, get_user_from_token
-
+load_dotenv()
 # Check if Firebase is initialized
 try:
     import firebase_admin

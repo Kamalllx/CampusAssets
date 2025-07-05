@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify, session, send_file
+
+from flask import Flask, request, jsonify, session, send_file, make_response
 from flask_cors import CORS
 import traceback
 import datetime
 import uuid
-from reports import ReportService
-from flask import send_file, make_response
+
 # Import everything from our modules
 from config import (
     FLASK_SECRET_KEY, ADMIN_ROLE, VIEWER_ROLE, db,
@@ -13,10 +13,28 @@ from config import (
 )
 from services import AuthService, ResourceService, AIService, FileService
 from utils import login_required, admin_required, validate_request_data, format_response
+from reports import ReportService
+
 
 app = Flask(__name__)
 app.secret_key = FLASK_SECRET_KEY
-CORS(app, supports_credentials=True, origins=["*"])
+
+# Enhanced CORS configuration
+CORS(app, 
+     supports_credentials=True, 
+     origins=["*"],  # Allow all origins for now
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     allow_headers=["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"])
+
+# Add OPTIONS handler for all routes
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
 
 # Initialize services
 auth_service = AuthService()
@@ -212,12 +230,20 @@ def export_excel():
         return format_response(error="Excel export failed", status=400)
 
 # ==================== AI ROUTES ====================
-# Add this route after your existing routes
-@app.route('/api/report/comprehensive-pdf', methods=['GET'])
+
+# Updated PDF report route with proper headers
+@app.route('/api/report/comprehensive-pdf', methods=['GET', 'OPTIONS'])
 @login_required
 def generate_comprehensive_report():
-    """Generate comprehensive PDF report"""
+    """Generate comprehensive PDF report with proper headers"""
     try:
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
+        
         report_service = ReportService()
         
         # Generate the PDF report
@@ -226,10 +252,13 @@ def generate_comprehensive_report():
         # Clean up temporary files
         report_service.cleanup()
         
-        # Create response
+        # Create response with proper headers
         response = make_response(pdf_buffer.read())
         response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
         response.headers['Content-Disposition'] = f'attachment; filename=campus_assets_comprehensive_report_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        response.headers['Content-Length'] = len(response.data)
         
         return response
         
@@ -237,31 +266,33 @@ def generate_comprehensive_report():
         app.logger.error(f"Report generation error: {str(e)}")
         return format_response(error=f"Failed to generate report: {str(e)}", status=500)
 
-# Also add a simple summary report route
-@app.route('/api/report/summary-pdf', methods=['GET'])
+
+# Also add a simpler test route
+@app.route('/api/report/test-pdf', methods=['GET', 'OPTIONS'])
 @login_required  
-def generate_summary_report():
-    """Generate summary PDF report"""
+def generate_test_report():
+    """Generate a simple test PDF"""
     try:
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
+            
         from fpdf import FPDF
         from io import BytesIO
-        
-        # Fetch basic stats
-        resources = list(db[RESOURCES_COLLECTION].find({}))
-        total_resources = len(resources)
-        total_cost = sum(float(r.get('cost', 0)) for r in resources)
         
         # Create simple PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font('Arial', 'B', 16)
-        pdf.cell(0, 10, 'Campus Assets Summary Report', 0, 1, 'C')
+        pdf.cell(0, 10, 'Test PDF Report', 0, 1, 'C')
         pdf.ln(10)
         
         pdf.set_font('Arial', '', 12)
-        pdf.cell(0, 8, f'Total Resources: {total_resources}', 0, 1)
-        pdf.cell(0, 8, f'Total Value: Rs.{total_cost:,.2f}', 0, 1)
         pdf.cell(0, 8, f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1)
+        pdf.cell(0, 8, 'This is a test PDF to verify download functionality.', 0, 1)
         
         # Output PDF
         pdf_output = BytesIO()
@@ -270,12 +301,14 @@ def generate_summary_report():
         
         response = make_response(pdf_output.read())
         response.headers['Content-Type'] = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=campus_assets_summary_{datetime.datetime.now().strftime("%Y%m%d")}.pdf'
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        response.headers['Content-Disposition'] = f'attachment; filename=test_report_{datetime.datetime.now().strftime("%Y%m%d")}.pdf'
         
         return response
         
     except Exception as e:
-        return format_response(error=f"Failed to generate summary report: {str(e)}", status=500)
+        return format_response(error=f"Failed to generate test report: {str(e)}", status=500)
 @app.route('/api/ai/natural-crud', methods=['POST'])
 @login_required
 @admin_required
