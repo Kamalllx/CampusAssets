@@ -1,0 +1,11 @@
+Flask
+Flask-CORS
+pymongo
+firebase-admin
+python-dotenv
+PyJWT
+pandas
+openpyxl
+requests
+email-validator
+Werkzeug
