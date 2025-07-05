@@ -105,7 +105,7 @@ class AuthService:
                 print("Email configuration not complete, skipping email")
                 return
             
-            approval_link = f"http://127.0.0.1:5000/admin-verify?email={admin_email}"
+            approval_link = f"https://campusassets.onrender.com/admin-verify?email={admin_email}"
             
             msg = MIMEMultipart()
             msg['Subject'] = 'New Admin Account Verification Required'
