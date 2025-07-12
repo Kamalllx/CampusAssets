@@ -70,7 +70,7 @@ export default function DashboardPage() {
   const fetchDashboardStats = async (token: string) => {
     try {
       const response = await fetch(
-        "https://campusassets.onrender.com/api/dashboard/stats",
+        "https://znlm131v-5000.inc1.devtunnels.ms/api/dashboard/stats",
         {
           headers: {
             Authorization: `Bearer ${token}`,

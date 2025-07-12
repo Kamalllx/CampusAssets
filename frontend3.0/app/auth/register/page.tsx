@@ -45,7 +45,7 @@ export default function RegisterPage() {
 
     try {
       const response = await fetch(
-        "https://campusassets.onrender.com/api/auth/register",
+        "https://znlm131v-5000.inc1.devtunnels.ms/api/auth/register",
         {
           method: "POST",
           headers: {

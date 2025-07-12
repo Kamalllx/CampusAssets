@@ -9,7 +9,8 @@ import uuid
 from config import (
     FLASK_SECRET_KEY, ADMIN_ROLE, VIEWER_ROLE, db,
     USERS_COLLECTION, RESOURCES_COLLECTION, SESSIONS_COLLECTION, CHAT_HISTORY_COLLECTION,
-    USER_STATUS_PENDING, USER_STATUS_APPROVED, USER_STATUS_REJECTED
+    USER_STATUS_PENDING, USER_STATUS_APPROVED, USER_STATUS_REJECTED,
+    JWT_SECRET
 )
 from services import AuthService, ResourceService, AIService, FileService
 from utils import login_required, admin_required, validate_request_data, format_response
@@ -113,6 +114,28 @@ def get_profile():
         return format_response(error="Failed to fetch profile", status=400)
 
 # ==================== RESOURCE ROUTES ====================
+import jwt
+from flask import request
+
+def get_user_from_token(request):
+    """Extract user data from JWT token"""
+    try:
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return None
+        
+        token = auth_header.split(' ')[1]
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        
+        return {
+            'email': payload.get('email'),
+            'role': payload.get('role', 'user'),
+            'uid': payload.get('uid'),
+        }
+        
+    except Exception as e:
+        print(f"Token validation error: {e}")
+        return None
 
 @app.route('/api/resources', methods=['GET'])
 @login_required
@@ -179,9 +202,258 @@ def search_resources():
         app.logger.error(f"Search resources error: {str(e)}")
         return format_response(error="Search failed", status=400)
 
+# ==================== NEW FILTER ENDPOINTS ====================
+
+@app.route('/api/filter-options', methods=['GET'])
+@login_required
+def get_filter_options():
+    """Get all filter options for enhanced filtering"""
+    try:
+        return resource_service.get_filter_options()
+    except Exception as e:
+        app.logger.error(f"Get filter options error: {str(e)}")
+        return format_response(error="Failed to fetch filter options", status=400)
+
+
+
+# ==================== NEW/UPDATED FILTER ENDPOINTS ====================
+
+@app.route('/api/departments', methods=['GET'])
+@login_required
+def get_departments():
+    """Get unique departments"""
+    return resource_service.get_unique_values('department')
+
+@app.route('/api/locations', methods=['GET'])
+@login_required
+def get_locations():
+    """Get unique locations"""
+    return resource_service.get_unique_values('location')
+
+# Add this new endpoint
+@app.route('/api/parent-departments', methods=['GET'])
+@login_required
+def get_parent_departments():
+    """Get unique parent departments"""
+    return resource_service.get_unique_values('parent_department')
+
+
+@app.route('/api/product-categories', methods=['GET'])
+@login_required
+def get_product_categories():
+    """Get unique product categories"""
+    try:
+        return resource_service.get_unique_values('product_category')
+    except Exception as e:
+        app.logger.error(f"Get product categories error: {str(e)}")
+        return format_response(error="Failed to fetch product categories", status=400)
+# in app.py
+
+# ==================== STATISTICS ENDPOINT (MODIFIED) ====================
+from flask import Flask, jsonify
+import pymongo
+from datetime import datetime
+import math
+
+RESOURCES_COLLECTION = 'resources'
+
+# Assume MongoDB client is initialized elsewhere
+client = pymongo.MongoClient("mongodb+srv://kamalkarteek1:rvZSeyVHhgOd2fbE@gbh.iliw2.mongodb.net/")
+db = client["campus_assets"]
+
+# In app.py
+
+from datetime import datetime, timezone # Make sure timezone is imported
+from flask import jsonify
+
+# In app.py
+
+def format_response(data=None, message=None, status=None, error=None):
+    """
+    Formats a standard JSON response.
+    Uses the modern, timezone-aware method for UTC timestamp.
+    """
+    # This line will now work because of the 'from datetime import datetime' import
+    response = {"timestamp": datetime.now(timezone.utc).isoformat()}
+
+    if data is not None:
+        response["data"] = data
+    if message is not None:
+        response["message"] = message
+    if status is not None:
+        response["status"] = status
+    if error is not None:
+        response["error"] = error
+
+    return jsonify(response), (status or 200)
+
+def is_valid_cost(cost):
+    """Check if cost is a valid numeric value (not None, not NaN, not empty string)"""
+    if cost is None:
+        return False
+    if isinstance(cost, str):
+        if cost.strip() == '' or cost.strip() == '---' or cost.strip() == 'N/A':
+            return False
+        try:
+            float(cost)
+            return True
+        except ValueError:
+            return False
+    if isinstance(cost, (int, float)):
+        return not math.isnan(cost) and not math.isinf(cost)
+    return False
+
+@app.route('/api/resources/stats', methods=['GET'])
+def get_resource_stats():
+    """
+    Get resource statistics, now including parent department stats.
+    """
+    try:
+        # Total number of resources
+        total_resources = db[RESOURCES_COLLECTION].count_documents({})
+        print(f"Total resources: {total_resources}")
+
+        # Department-wise count
+        dept_pipeline = [
+            {'$match': {'department': {'$ne': None, '$ne': ''}}},
+            {'$group': {'_id': '$department', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        dept_stats = list(db[RESOURCES_COLLECTION].aggregate(dept_pipeline))
+
+        # *** NEW: Parent Department-wise count ***
+        parent_dept_pipeline = [
+            {'$match': {'parent_department': {'$ne': None, '$ne': ''}}},
+            {'$group': {'_id': '$parent_department', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        parent_dept_stats = list(db[RESOURCES_COLLECTION].aggregate(parent_dept_pipeline))
+
+        # Product category-wise count
+        category_pipeline = [
+            {'$match': {'product_category': {'$ne': None, '$ne': ''}}},
+            {'$group': {'_id': '$product_category', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        category_stats = list(db[RESOURCES_COLLECTION].aggregate(category_pipeline))
+        print(f"Category stats count: {len(category_stats)}")
+
+        # Section location-wise count
+        section_pipeline = [
+            {'$match': {'section_location': {'$ne': None, '$ne': ''}}},
+            {'$group': {'_id': '$section_location', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]
+        section_stats = list(db[RESOURCES_COLLECTION].aggregate(section_pipeline))
+        print(f"Section stats count: {len(section_stats)}")
+
+        # Debug: Check different types of cost values
+        cost_analysis = list(db[RESOURCES_COLLECTION].aggregate([
+            {'$group': {
+                '_id': {'$type': '$cost'},
+                'count': {'$sum': 1},
+                'sample_values': {'$addToSet': '$cost'}
+            }},
+            {'$addFields': {
+                'sample_values': {'$slice': ['$sample_values', 5]}  # Show first 5 unique values
+            }}
+        ]))
+        print("Cost field analysis:", cost_analysis)
+
+        # More comprehensive cost calculation
+        # First, let's identify valid numeric costs
+        valid_cost_pipeline = [
+            {'$match': {'cost': {'$exists': True}}},
+            {'$addFields': {
+                'cost_numeric': {
+                    '$cond': {
+                        'if': {'$in': [{'$type': '$cost'}, ['double', 'int', 'long']]},
+                        'then': '$cost',
+                        'else': {
+                            '$cond': {
+                                'if': {'$and': [
+                                    {'$eq': [{'$type': '$cost'}, 'string']},
+                                    {'$ne': ['$cost', '']}, {'$ne': ['$cost', '---']},
+                                    {'$ne': ['$cost', 'N/A']}, {'$ne': ['$cost', 'n/a']}
+                                ]},
+                                'then': {'$toDouble': '$cost'},
+                                'else': None
+                            }
+                        }
+                    }
+                }
+            }},
+            {'$match': {'cost_numeric': {'$ne': None, '$exists': True}}},
+            {'$addFields': {'is_valid_number': {'$and': [{'$ne': ['$cost_numeric', float('nan')]}, {'$ne': ['$cost_numeric', float('inf')]}, {'$ne': ['$cost_numeric', float('-inf')]}] }}},
+            {'$match': {'is_valid_number': True}},
+            {'$group': {
+                '_id': None, 'total_cost': {'$sum': '$cost_numeric'},
+                'count': {'$sum': 1}, 'avg_cost': {'$avg': '$cost_numeric'},
+                'min_cost': {'$min': '$cost_numeric'}, 'max_cost': {'$max': '$cost_numeric'}
+            }}
+        ]
+        cost_result = list(db[RESOURCES_COLLECTION].aggregate(valid_cost_pipeline))
+
+        if cost_result:
+            total_cost = cost_result[0].get('total_cost', 0)
+            valid_cost_count = cost_result[0].get('count', 0)
+            avg_cost = cost_result[0].get('avg_cost', 0)
+            min_cost = cost_result[0].get('min_cost', 0)
+            max_cost = cost_result[0].get('max_cost', 0)
+        else:
+            total_cost, valid_cost_count, avg_cost, min_cost, max_cost = 0, 0, 0, 0, 0
+
+        # Department-wise cost calculation (as provided)
+        dept_cost_pipeline = [
+            {'$match': {'cost': {'$exists': True}}},
+            {'$addFields': { # Same conversion logic as above
+                'cost_numeric': {
+                    '$cond': {
+                        'if': {'$in': [{'$type': '$cost'}, ['double', 'int', 'long']]}, 'then': '$cost',
+                        'else': {'$cond': {'if': {'$and': [{'$eq': [{'$type': '$cost'}, 'string']}, {'$ne': ['$cost', '']}, {'$ne': ['$cost', '---']}, {'$ne': ['$cost', 'N/A']}]}, 'then': {'$toDouble': '$cost'}, 'else': None }}
+                    }
+                }
+            }},
+            {'$match': {'cost_numeric': {'$ne': None, '$exists': True}}},
+            {'$group': {
+                '_id': '$department',
+                'total_cost': {'$sum': '$cost_numeric'},
+                'count': {'$sum': 1},
+                'valid_cost_count': {'$sum': 1} # Simplified, as all here have valid cost
+            }},
+            {'$sort': {'total_cost': -1}}
+        ]
+        dept_cost_stats = list(db[RESOURCES_COLLECTION].aggregate(dept_cost_pipeline))
+
+        excluded_count = total_resources - valid_cost_count
+
+        return format_response(
+            data={
+                'total_resources': total_resources,
+                'total_cost': round(total_cost, 2),
+                'valid_cost_count': valid_cost_count,
+                'excluded_from_cost': excluded_count,
+                'cost_statistics': {
+                    'average_cost': round(avg_cost, 2),
+                    'min_cost': round(min_cost, 2),
+                    'max_cost': round(max_cost, 2)
+                },
+                'department_stats': dept_stats,
+                'parent_department_stats': parent_dept_stats, # Added
+                'department_cost_stats': dept_cost_stats,
+                'category_stats': category_stats,
+                'section_stats': section_stats
+            },
+            message="Statistics retrieved successfully",
+            status=200
+        )
+
+    except Exception as e:
+        app.logger.error(f"Get resource stats error: {str(e)}")
+        return format_response(error=f"Failed to get statistics: {str(e)}", status=500)
 # ==================== FILE UPLOAD/EXPORT ROUTES ====================
 
-@app.route('/api/upload/csv', methods=['POST'])
+@app.route('/api/upload-csv', methods=['POST'])
 @login_required
 @admin_required
 def upload_csv():
@@ -189,27 +461,35 @@ def upload_csv():
         if 'file' not in request.files:
             return format_response(error="No file provided", status=400)
         
+        parent_department = request.form.get('parent_department')
+        if not parent_department:
+            return format_response(error="Parent department is required", status=400)
+        
         file = request.files['file']
-        return file_service.upload_csv(file, request)
+        return file_service.upload_csv(file, request, parent_department)
     except Exception as e:
         app.logger.error(f"CSV upload error: {str(e)}")
-        return format_response(error="CSV upload failed", status=400)
+        return format_response(error="CSV upload failed", status=500)
 
-@app.route('/api/upload/excel', methods=['POST'])
+@app.route('/api/upload-excel', methods=['POST'])
 @login_required
 @admin_required
 def upload_excel():
     try:
         if 'file' not in request.files:
             return format_response(error="No file provided", status=400)
-        
+
+        parent_department = request.form.get('parent_department')
+        if not parent_department:
+            return format_response(error="Parent department is required", status=400)
+            
         file = request.files['file']
-        return file_service.upload_excel(file, request)
+        return file_service.upload_excel(file, request, parent_department)
     except Exception as e:
         app.logger.error(f"Excel upload error: {str(e)}")
-        return format_response(error="Excel upload failed", status=400)
+        return format_response(error="Excel upload failed", status=500)
 
-@app.route('/api/export/csv', methods=['GET'])
+@app.route('/api/export-csv', methods=['GET'])
 @login_required
 def export_csv():
     try:
@@ -217,9 +497,9 @@ def export_csv():
         return file_service.export_csv(filters)
     except Exception as e:
         app.logger.error(f"CSV export error: {str(e)}")
-        return format_response(error="CSV export failed", status=400)
+        return format_response(error="CSV export failed", status=500)
 
-@app.route('/api/export/excel', methods=['GET'])
+@app.route('/api/export-excel', methods=['GET'])
 @login_required
 def export_excel():
     try:
@@ -227,88 +507,110 @@ def export_excel():
         return file_service.export_excel(filters)
     except Exception as e:
         app.logger.error(f"Excel export error: {str(e)}")
-        return format_response(error="Excel export failed", status=400)
-
+        return format_response(error="Excel export failed", status=500)
 # ==================== AI ROUTES ====================
+# in app.py
 
-# Updated PDF report route with proper headers
+# In app.py, at the top of the file
+
+from flask import Flask, jsonify, request, make_response, current_app
+from datetime import datetime, timezone # <-- CORRECT IMPORT FOR DATETIME
+# You can remove 'import datetime' if it's no longer used elsewhere
+
+# ... other imports
+from reports import ReportService # Import the new service
+
+# Assume 'app', 'login_required', and 'format_response' are defined elsewhere
+
 @app.route('/api/report/comprehensive-pdf', methods=['GET', 'OPTIONS'])
 @login_required
 def generate_comprehensive_report():
     """Generate comprehensive PDF report with proper headers"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "Authorization, Content-Type")
+        response.headers.add('Access-Control-Allow-Methods', "GET, OPTIONS")
+        return response
+
     try:
-        if request.method == 'OPTIONS':
-            response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add('Access-Control-Allow-Headers', "*")
-            response.headers.add('Access-Control-Allow-Methods', "*")
-            return response
-        
-        report_service = ReportService()
-        
+        # Get the raw token to pass to the service
+        auth_token = get_auth_token_from_request(request)
+        if not auth_token:
+            return format_response(error="Authorization token is missing or invalid", status=401)
+
+        api_base_url = request.host_url.rstrip('/')
+        report_service = ReportService(api_base_url=api_base_url, auth_token=auth_token)
+
         # Generate the PDF report
         pdf_buffer = report_service.generate_comprehensive_report()
-        
-        # Clean up temporary files
-        report_service.cleanup()
-        
-        # Create response with proper headers
-        response = make_response(pdf_buffer.read())
+
+        # Create response
+        response = make_response(pdf_buffer.getvalue())
         response.headers['Content-Type'] = 'application/pdf'
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
-        response.headers['Content-Disposition'] = f'attachment; filename=campus_assets_comprehensive_report_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
-        response.headers['Content-Length'] = len(response.data)
-        
+        response.headers['Content-Disposition'] = f'attachment; filename=MSRIT_Comprehensive_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
         return response
-        
+
     except Exception as e:
-        app.logger.error(f"Report generation error: {str(e)}")
-        return format_response(error=f"Failed to generate report: {str(e)}", status=500)
+        # Using logger is great for debugging
+        # current_app.logger.error(f"Report generation error: {str(e)}", exc_info=True)
+        print(f"Report generation error: {str(e)}") # Use print if logger is not set up
+        return format_response(error=f"Failed to generate report: An internal error occurred.", status=500)
 
 
-# Also add a simpler test route
+
+def get_auth_token_from_request(req):
+    """Extracts the JWT token string from the request headers."""
+    auth_header = req.headers.get('Authorization')
+    if auth_header and auth_header.startswith('Bearer '):
+        return auth_header.split(' ')[1]
+    return None
+# The test route can remain as is, or be updated for consistency
 @app.route('/api/report/test-pdf', methods=['GET', 'OPTIONS'])
-@login_required  
+@login_required   
 def generate_test_report():
     """Generate a simple test PDF"""
+    if request.method == 'OPTIONS':
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add('Access-Control-Allow-Headers', "*")
+        response.headers.add('Access-Control-Allow-Methods', "*")
+        return response
+         
     try:
-        if request.method == 'OPTIONS':
-            response = make_response()
-            response.headers.add("Access-Control-Allow-Origin", "*")
-            response.headers.add('Access-Control-Allow-Headers', "*")
-            response.headers.add('Access-Control-Allow-Methods', "*")
-            return response
-            
         from fpdf import FPDF
         from io import BytesIO
-        
+         
         # Create simple PDF
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font('Arial', 'B', 16)
         pdf.cell(0, 10, 'Test PDF Report', 0, 1, 'C')
         pdf.ln(10)
-        
+         
         pdf.set_font('Arial', '', 12)
         pdf.cell(0, 8, f'Generated: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', 0, 1)
         pdf.cell(0, 8, 'This is a test PDF to verify download functionality.', 0, 1)
-        
+         
         # Output PDF
         pdf_output = BytesIO()
         pdf.output(pdf_output)
         pdf_output.seek(0)
-        
+         
         response = make_response(pdf_output.read())
         response.headers['Content-Type'] = 'application/pdf'
         response.headers['Access-Control-Allow-Origin'] = '*'
         response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
         response.headers['Content-Disposition'] = f'attachment; filename=test_report_{datetime.datetime.now().strftime("%Y%m%d")}.pdf'
-        
+         
         return response
-        
+         
     except Exception as e:
+        current_app.logger.error(f"Test report generation error: {str(e)}")
         return format_response(error=f"Failed to generate test report: {str(e)}", status=500)
+    
 @app.route('/api/ai/natural-crud', methods=['POST'])
 @login_required
 @admin_required
@@ -384,23 +686,23 @@ def recent_activity():
 
 # ==================== UTILITY ROUTES ====================
 
-@app.route('/api/locations', methods=['GET'])
-@login_required
-def get_locations():
-    try:
-        return resource_service.get_unique_values('location')
-    except Exception as e:
-        app.logger.error(f"Get locations error: {str(e)}")
-        return format_response(error="Failed to fetch locations", status=400)
+# @app.route('/api/locations', methods=['GET'])
+# @login_required
+# def get_locations():
+#     try:
+#         return resource_service.get_unique_values('location')
+#     except Exception as e:
+#         app.logger.error(f"Get locations error: {str(e)}")
+#         return format_response(error="Failed to fetch locations", status=400)
 
-@app.route('/api/departments', methods=['GET'])
-@login_required
-def get_departments():
-    try:
-        return resource_service.get_unique_values('department')
-    except Exception as e:
-        app.logger.error(f"Get departments error: {str(e)}")
-        return format_response(error="Failed to fetch departments", status=400)
+# @app.route('/api/departments', methods=['GET'])
+# @login_required
+# def get_departments():
+#     try:
+#         return resource_service.get_unique_values('department')
+#     except Exception as e:
+#         app.logger.error(f"Get departments error: {str(e)}")
+#         return format_response(error="Failed to fetch departments", status=400)
 
 # ==================== ADMIN VERIFICATION WEB ROUTES ====================
 
@@ -673,6 +975,7 @@ def admin_verify_action():
         </html>
         """
 
+
 @app.route('/', methods=['GET'])
 def home():
     """Simple home page"""
@@ -701,4 +1004,4 @@ def home():
     """
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

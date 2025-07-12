@@ -169,7 +169,7 @@ export default function ResourcesPage() {
       }
 
       const response = await fetch(
-        `https://campusassets.onrender.com/api/resources?${params}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms/api/resources?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -198,7 +198,7 @@ export default function ResourcesPage() {
   const fetchLocations = async (token: string) => {
     try {
       const response = await fetch(
-        "https://campusassets.onrender.com/api/locations",
+        "https://znlm131v-5000.inc1.devtunnels.ms/api/locations",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -215,7 +215,7 @@ export default function ResourcesPage() {
   const fetchDepartments = async (token: string) => {
     try {
       const response = await fetch(
-        "https://campusassets.onrender.com/api/departments",
+        "https://znlm131v-5000.inc1.devtunnels.ms/api/departments",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -235,7 +235,7 @@ export default function ResourcesPage() {
 
     try {
       const response = await fetch(
-        "https://campusassets.onrender.com/api/resources",
+        "https://znlm131v-5000.inc1.devtunnels.ms/api/resources",
         {
           method: "POST",
           headers: {
@@ -280,7 +280,7 @@ export default function ResourcesPage() {
 
     try {
       const response = await fetch(
-        `https://campusassets.onrender.com/api/resources/${selectedResource._id}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms/api/resources/${selectedResource._id}`,
         {
           method: "PUT",
           headers: {
@@ -333,7 +333,7 @@ export default function ResourcesPage() {
 
     try {
       const response = await fetch(
-        `https://campusassets.onrender.com/api/resources/${resourceId}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms/api/resources/${resourceId}`,
         {
           method: "DELETE",
           headers: {

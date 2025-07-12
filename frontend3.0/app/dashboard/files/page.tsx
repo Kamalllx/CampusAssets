@@ -52,7 +52,7 @@ export default function FilesPage() {
       }, 200);
 
       const response = await fetch(
-        `https://campusassets.onrender.com/api/upload/${type}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms/api/upload/${type}`,
         {
           method: "POST",
           headers: {
@@ -117,7 +117,7 @@ export default function FilesPage() {
     try {
       const params = new URLSearchParams(filters);
       const response = await fetch(
-        `https://campusassets.onrender.com/api/export/${format}?${params}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms/api/export/${format}?${params}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,

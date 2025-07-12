@@ -3,7 +3,7 @@ import json
 import os
 from datetime import datetime
 
-BASE_URL = 'https://campusassets.onrender.com'
+BASE_URL = 'https://znlm131v-5000.inc1.devtunnels.ms'
 
 class TestCLI:
     def __init__(self):

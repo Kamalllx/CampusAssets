@@ -107,7 +107,7 @@ export default function AIPage() {
       if (activeTab === "crud") {
         // Natural language CRUD
         response = await fetch(
-          "https://campusassets.onrender.com/api/ai/natural-crud",
+          "https://znlm131v-5000.inc1.devtunnels.ms/api/ai/natural-crud",
           {
             method: "POST",
             headers: {
@@ -121,7 +121,7 @@ export default function AIPage() {
       } else {
         // Regular chat
         response = await fetch(
-          "https://campusassets.onrender.com/api/ai/chat",
+          "https://znlm131v-5000.inc1.devtunnels.ms/api/ai/chat",
           {
             method: "POST",
             headers: {
@@ -277,7 +277,7 @@ export default function AIPage() {
 
       const token = localStorage.getItem("session_token");
       const response = await fetch(
-        `https://campusassets.onrender.com${endpoint}`,
+        `https://znlm131v-5000.inc1.devtunnels.ms${endpoint}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
